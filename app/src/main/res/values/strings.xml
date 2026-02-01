@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Основные -->
+    <string name="app_name">Погода</string>
+    <string name="weather">Погода</string>
+    <string name="notes">Заметки</string>
+    <string name="settings">Настройки</string>
+
+    <!-- Экран погоды -->
+    <string name="moscow">Москва</string>
+    <string name="sunny">Солнечно</string>
+    <string name="cloudy">Облачно</string>
+    <string name="rainy">Дождливо</string>
+    <string name="snowy">Снежно</string>
+    <string name="hourly_forecast">Почасовой прогноз</string>
+    <string name="daily_forecast">Прогноз на 5 дней</string>
+    <string name="humidity">Влажность</string>
+    <string name="wind">Ветер</string>
+    <string name="pressure">Давление</string>
+    <string name="today">Сегодня</string>
+    <string name="tomorrow">Завтра</string>
+
+    <!-- Дни недели -->
+    <string name="monday">Понедельник</string>
+    <string name="tuesday">Вторник</string>
+    <string name="wednesday">Среда</string>
+    <string name="thursday">Четверг</string>
+    <string name="friday">Пятница</string>
+    <string name="saturday">Суббота</string>
+    <string name="sunday">Воскресенье</string>
+
+    <!-- Экран заметок -->
+    <string name="no_notes">Заметок пока нет</string>
+    <string name="new_note">Новая заметка</string>
+    <string name="edit_note">Редактировать заметку</string>
+    <string name="delete_note">Удалить заметку</string>
+    <string name="delete_note_confirm">Вы уверены, что хотите удалить эту заметку?</string>
+    <string name="note_title">Заголовок</string>
+    <string name="note_description">Описание</string>
+    <string name="enter_title">Введите заголовок</string>
+    <string name="note_saved">Заметка сохранена</string>
+    <string name="note_updated">Заметка обновлена</string>
+    <string name="note_deleted">Заметка удалена</string>
+    <string name="undo">Отменить</string>
+    <string name="restore">Восстановить</string>
+
+    <!-- Экран настроек -->
+    <string name="theme">Тема</string>
+    <string name="light_theme">Светлая</string>
+    <string name="dark_theme">Темная</string>
+    <string name="system_theme">Как в системе</string>
+    <string name="language">Язык</string>
+    <string name="russian">Русский</string>
+    <string name="english">Английский</string>
+    <string name="units">Единицы измерения</string>
+    <string name="celsius">°C (Цельсий)</string>
+    <string name="fahrenheit">°F (Фаренгейт)</string>
+    <string name="save">Сохранить</string>
+    <string name="cancel">Отмена</string>
+
+    <!-- Сообщения -->
+    <string name="loading">Загрузка...</string>
+    <string name="error">Ошибка</string>
+    <string name="retry">Повторить</string>
+    <string name="success">Успешно</string>
+    <string name="warning">Внимание</string>
+
+    <!-- Кнопки и действия -->
+    <string name="add">Добавить</string>
+    <string name="edit">Редактировать</string>
+    <string name="delete">Удалить</string>
+    <string name="search">Поиск</string>
+    <string name="refresh">Обновить</string>
+    <string name="back">Назад</string>
+    <string name="next">Далее</string>
+    <string name="done">Готово</string>
+
+    <!-- Диалоги -->
+    <string name="yes">Да</string>
+    <string name="no">Нет</string>
+    <string name="ok">OK</string>
+    <string name="apply">Применить</string>
+
+    <!-- Единицы измерения -->
+    <string name="percent">%</string>
+    <string name="meters_per_second">м/с</string>
+    <string name="kilometers_per_hour">км/ч</string>
+    <string name="millimeters">мм</string>
+    <string name="degrees">°</string>
+</resources>
