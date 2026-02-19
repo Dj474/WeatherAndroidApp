@@ -96,29 +96,23 @@ public class NotesFragment extends Fragment {
     }
 
     private void loadNotes() {
-        new AsyncTask<Void, Void, List<WeatherNote>>() {
-            @Override
-            protected List<WeatherNote> doInBackground(Void... voids) {
-                return noteDao.getAllNotes().getValue();
+        // Наблюдаем за LiveData напрямую. AsyncTask здесь НЕ НУЖЕН.
+        noteDao.getAllNotes().observe(getViewLifecycleOwner(), notes -> {
+            notesList.clear();
+            if (notes != null) {
+                notesList.addAll(notes);
             }
+            notesAdapter.notifyDataSetChanged();
 
-            @Override
-            protected void onPostExecute(List<WeatherNote> notes) {
-                notesList.clear();
-                if (notes != null) {
-                    notesList.addAll(notes);
-                }
-                notesAdapter.notifyDataSetChanged();
-
-                if (notesList.isEmpty()) {
-                    emptyTextView.setVisibility(View.VISIBLE);
-                    notesRecyclerView.setVisibility(View.GONE);
-                } else {
-                    emptyTextView.setVisibility(View.GONE);
-                    notesRecyclerView.setVisibility(View.VISIBLE);
-                }
+            // Переключаем видимость "Пустого списка"
+            if (notesList.isEmpty()) {
+                emptyTextView.setVisibility(View.VISIBLE);
+                notesRecyclerView.setVisibility(View.GONE);
+            } else {
+                emptyTextView.setVisibility(View.GONE);
+                notesRecyclerView.setVisibility(View.VISIBLE);
             }
-        }.execute();
+        });
     }
 
     private void showAddNoteDialog() {
