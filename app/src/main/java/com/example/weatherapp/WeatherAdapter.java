@@ -9,12 +9,14 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import java.util.List;
+import java.util.Locale;
 
 public class WeatherAdapter extends RecyclerView.Adapter<WeatherAdapter.WeatherViewHolder> {
 
     private Context context;
     private List<WeatherItem> items;
     private boolean isHourly;
+    private boolean isCelsius = true;
 
     public WeatherAdapter(Context context, List<WeatherItem> items, boolean isHourly) {
         this.context = context;
@@ -22,18 +24,16 @@ public class WeatherAdapter extends RecyclerView.Adapter<WeatherAdapter.WeatherV
         this.isHourly = isHourly;
     }
 
+    public void setUnits(boolean isCelsius) {
+        this.isCelsius = isCelsius;
+        notifyDataSetChanged();
+    }
+
     @NonNull
     @Override
     public WeatherViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         LayoutInflater inflater = LayoutInflater.from(context);
-        View view;
-
-        if (isHourly) {
-            view = inflater.inflate(R.layout.item_hourly_weather, parent, false);
-        } else {
-            view = inflater.inflate(R.layout.item_daily_weather, parent, false);
-        }
-
+        View view = inflater.inflate(isHourly ? R.layout.item_hourly_weather : R.layout.item_daily_weather, parent, false);
         return new WeatherViewHolder(view, isHourly);
     }
 
@@ -42,9 +42,18 @@ public class WeatherAdapter extends RecyclerView.Adapter<WeatherAdapter.WeatherV
         WeatherItem item = items.get(position);
 
         holder.timeTextView.setText(item.getTime());
-        holder.tempTextView.setText(String.format("%.0f°C", item.getTemperature()));
         holder.descriptionTextView.setText(item.getDescription());
         holder.iconImageView.setImageResource(item.getIconResId());
+
+        double temp = item.getTemperature();
+        String unit = "°C";
+
+        if (!isCelsius) {
+            temp = (temp * 1.8) + 32;
+            unit = "°F";
+        }
+
+        holder.tempTextView.setText(String.format(Locale.getDefault(), "%.0f%s", temp, unit));
     }
 
     @Override

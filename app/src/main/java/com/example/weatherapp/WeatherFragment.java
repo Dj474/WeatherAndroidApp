@@ -1,5 +1,7 @@
 package com.example.weatherapp;
 
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -14,10 +16,6 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import org.json.JSONObject;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -37,16 +35,11 @@ public class WeatherFragment extends Fragment {
 
     @Nullable
     @Override
-    public View onCreateView(@NonNull LayoutInflater inflater,
-                             @Nullable ViewGroup container,
-                             @Nullable Bundle savedInstanceState) {
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_weather, container, false);
-
         initViews(view);
         setupRecyclerViews();
-        updateTexts();
-        loadWeatherData();
-
+        // Мы не вызываем loadWeatherData здесь, так как onResume сделает это за нас
         return view;
     }
 
@@ -60,54 +53,24 @@ public class WeatherFragment extends Fragment {
 
         hourlyForecastLabel = view.findViewById(R.id.hourlyForecastLabel);
         dailyForecastLabel = view.findViewById(R.id.dailyForecastLabel);
-
         humidityLabel = view.findViewById(R.id.humidityLabel);
         windLabel = view.findViewById(R.id.windLabel);
         pressureLabel = view.findViewById(R.id.pressureLabel);
 
         swipeRefreshLayout = view.findViewById(R.id.swipeRefreshLayout);
-        swipeRefreshLayout.setOnRefreshListener(() -> {
-            loadWeatherData();
-            swipeRefreshLayout.setRefreshing(false);
-        });
+        swipeRefreshLayout.setOnRefreshListener(this::loadWeatherData);
 
         hourlyRecyclerView = view.findViewById(R.id.hourlyRecyclerView);
         dailyRecyclerView = view.findViewById(R.id.dailyRecyclerView);
     }
 
-    private void updateTexts() {
-        if (hourlyForecastLabel != null) {
-            hourlyForecastLabel.setText(getString(R.string.hourly_forecast));
-        }
-        if (dailyForecastLabel != null) {
-            dailyForecastLabel.setText(getString(R.string.daily_forecast));
-        }
-        if (cityTextView != null) {
-            cityTextView.setText(getString(R.string.moscow));
-        }
-        if (weatherDescriptionTextView != null) {
-            weatherDescriptionTextView.setText(getString(R.string.sunny));
-        }
-        if (humidityLabel != null) {
-            humidityLabel.setText(getString(R.string.humidity));
-        }
-        if (windLabel != null) {
-            windLabel.setText(getString(R.string.wind));
-        }
-        if (pressureLabel != null) {
-            pressureLabel.setText(getString(R.string.pressure));
-        }
-    }
-
     private void setupRecyclerViews() {
         hourlyItems = new ArrayList<>();
         dailyItems = new ArrayList<>();
-
         hourlyAdapter = new WeatherAdapter(getContext(), hourlyItems, true);
         dailyAdapter = new WeatherAdapter(getContext(), dailyItems, false);
 
-        hourlyRecyclerView.setLayoutManager(new LinearLayoutManager(
-                getContext(), LinearLayoutManager.HORIZONTAL, false));
+        hourlyRecyclerView.setLayoutManager(new LinearLayoutManager(getContext(), LinearLayoutManager.HORIZONTAL, false));
         dailyRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
 
         hourlyRecyclerView.setAdapter(hourlyAdapter);
@@ -115,73 +78,57 @@ public class WeatherFragment extends Fragment {
     }
 
     private void loadWeatherData() {
-        // В реальном приложении здесь должен быть API ключ
         new FetchWeatherTask().execute(getString(R.string.moscow));
     }
 
-    private void updateUI(String city, double temp, String description,
-                          int humidity, double wind, int pressure) {
+    private void updateUI(String city, double temp, String description, int humidity, double wind, int pressure) {
+        // --- СИНХРОНИЗАЦИЯ С SettingsFragment ---
+        SharedPreferences prefs = requireContext().getSharedPreferences("app_settings", Context.MODE_PRIVATE);
+        String units = prefs.getString("units", "celsius"); // Читаем строку "celsius" или "fahrenheit"
+        boolean isCelsius = !units.equals("fahrenheit");
+
+        double displayTemp = isCelsius ? temp : (temp * 1.8) + 32;
+        String unitSymbol = isCelsius ? "°C" : "°F";
+        // ---------------------------------------
+
         cityTextView.setText(city);
-        temperatureTextView.setText(String.format(Locale.getDefault(), "%.0f°C", temp));
+        temperatureTextView.setText(String.format(Locale.getDefault(), "%.0f%s", displayTemp, unitSymbol));
         weatherDescriptionTextView.setText(description);
-        humidityTextView.setText(String.format(Locale.getDefault(), "%d%s", humidity, getString(R.string.percent)));
+
+        humidityTextView.setText(String.format(Locale.getDefault(), "%d%%", humidity));
         windTextView.setText(String.format(Locale.getDefault(), "%.1f %s", wind, getString(R.string.meters_per_second)));
         pressureTextView.setText(String.format(Locale.getDefault(), "%d %s", pressure, getString(R.string.millimeters)));
 
-        // Обновляем списки с тестовыми данными, используя строки из ресурсов
-        updateForecastLists();
+        updateStaticLabels();
+
+        updateForecastLists(isCelsius);
+        swipeRefreshLayout.setRefreshing(false);
     }
 
-    private void updateForecastLists() {
+    private void updateStaticLabels() {
+        if (hourlyForecastLabel != null) hourlyForecastLabel.setText(getString(R.string.hourly_forecast));
+        if (dailyForecastLabel != null) dailyForecastLabel.setText(getString(R.string.daily_forecast));
+        if (humidityLabel != null) humidityLabel.setText(getString(R.string.humidity));
+        if (windLabel != null) windLabel.setText(getString(R.string.wind));
+        if (pressureLabel != null) pressureLabel.setText(getString(R.string.pressure));
+    }
+
+    private void updateForecastLists(boolean isCelsius) {
         hourlyItems.clear();
         dailyItems.clear();
 
-        // Тестовые данные для почасового прогноза
+        hourlyAdapter.setUnits(isCelsius);
+        dailyAdapter.setUnits(isCelsius);
+
         SimpleDateFormat sdf = new SimpleDateFormat("HH:mm", Locale.getDefault());
         for (int i = 0; i < 8; i++) {
-            Date time = new Date(System.currentTimeMillis() + i * 3600000);
-            WeatherItem item = new WeatherItem(
-                    sdf.format(time),
-                    getString(R.string.sunny),  // Используем строку из ресурсов
-                    25 + i,
-                    R.drawable.ic_sunny
-            );
-            hourlyItems.add(item);
+            hourlyItems.add(new WeatherItem(sdf.format(new Date(System.currentTimeMillis() + i * 3600000)),
+                    getString(R.string.sunny), 25 + i, R.drawable.ic_sunny));
         }
 
-        // Тестовые данные для прогноза на 5 дней
-        String[] dayNames = {
-                getString(R.string.today),
-                getString(R.string.tomorrow),
-                getString(R.string.tuesday),
-                getString(R.string.wednesday),
-                getString(R.string.thursday)
-        };
-
-        String[] descriptions = {
-                getString(R.string.sunny),
-                getString(R.string.cloudy),
-                getString(R.string.sunny),
-                getString(R.string.rainy),
-                getString(R.string.cloudy)
-        };
-
-        int[] icons = {
-                R.drawable.ic_sunny,
-                R.drawable.ic_cloudy,
-                R.drawable.ic_sunny,
-                R.drawable.ic_sunny, // Замени на ic_rainy если есть
-                R.drawable.ic_cloudy
-        };
-
+        String[] dayNames = {getString(R.string.today), getString(R.string.tomorrow), "Вт", "Ср", "Чт"};
         for (int i = 0; i < 5; i++) {
-            WeatherItem item = new WeatherItem(
-                    dayNames[i],
-                    descriptions[i],  // Используем строку из ресурсов
-                    22 + i,
-                    icons[i]
-            );
-            dailyItems.add(item);
+            dailyItems.add(new WeatherItem(dayNames[i], getString(R.string.sunny), 22 + i, R.drawable.ic_sunny));
         }
 
         hourlyAdapter.notifyDataSetChanged();
@@ -189,32 +136,21 @@ public class WeatherFragment extends Fragment {
     }
 
     private class FetchWeatherTask extends AsyncTask<String, Void, String> {
-
         @Override
         protected String doInBackground(String... params) {
-            String city = params[0];
-            // Здесь должен быть реальный API запрос
-            // Для примера возвращаем тестовые данные
+            try { Thread.sleep(300); } catch (Exception ignored) {}
             return String.format(Locale.getDefault(),
-                    "{\"city\":\"%s\",\"temp\":25,\"description\":\"%s\",\"humidity\":65,\"wind\":5,\"pressure\":760}",
-                    city, getString(R.string.sunny));
+                    "{\"city\":\"%s\",\"temp\":25,\"description\":\"%s\",\"humidity\":65,\"wind\":5.0,\"pressure\":760}",
+                    params[0], getString(R.string.sunny));
         }
 
         @Override
         protected void onPostExecute(String result) {
             try {
                 JSONObject json = new JSONObject(result);
-                updateUI(
-                        json.getString("city"),
-                        json.getDouble("temp"),
-                        json.getString("description"),
-                        json.getInt("humidity"),
-                        json.getDouble("wind"),
-                        json.getInt("pressure")
-                );
+                updateUI(json.getString("city"), json.getDouble("temp"), json.getString("description"),
+                        json.getInt("humidity"), json.getDouble("wind"), json.getInt("pressure"));
             } catch (Exception e) {
-                Toast.makeText(getContext(), getString(R.string.error), Toast.LENGTH_SHORT).show();
-                // Показываем тестовые данные даже при ошибке
                 updateUI(getString(R.string.moscow), 25, getString(R.string.sunny), 65, 5, 760);
             }
         }
@@ -223,7 +159,6 @@ public class WeatherFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        updateTexts();
-        updateForecastLists();
+        loadWeatherData();
     }
 }
