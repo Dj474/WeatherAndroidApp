@@ -76,36 +76,29 @@ public class SettingsFragment extends Fragment {
     private void saveSettings() {
         SharedPreferences.Editor editor = sharedPreferences.edit();
 
-        // Сохранение темы
         String theme;
-        if (((RadioButton) themeRadioGroup.findViewById(R.id.lightThemeRadio)).isChecked()) {
+        int selectedThemeId = themeRadioGroup.getCheckedRadioButtonId();
+        if (selectedThemeId == R.id.lightThemeRadio) {
             theme = "light";
-        } else if (((RadioButton) themeRadioGroup.findViewById(R.id.darkThemeRadio)).isChecked()) {
+        } else if (selectedThemeId == R.id.darkThemeRadio) {
             theme = "dark";
         } else {
             theme = "system";
         }
-        editor.putString("theme", theme);
 
-        // Сохранение языка
-        String language = ((RadioButton) languageRadioGroup.findViewById(R.id.englishRadio)).isChecked()
+        String language = (languageRadioGroup.getCheckedRadioButtonId() == R.id.englishRadio)
                 ? "en" : "ru";
-        editor.putString("language", language);
 
-        // Сохранение единиц измерения
-        String units = ((RadioButton) unitsRadioGroup.findViewById(R.id.fahrenheitRadio)).isChecked()
+        String units = (unitsRadioGroup.getCheckedRadioButtonId() == R.id.fahrenheitRadio)
                 ? "fahrenheit" : "celsius";
+
+        editor.putString("theme", theme);
+        editor.putString("language", language);
         editor.putString("units", units);
-
         editor.apply();
+        ThemeManager.setThemeMode(theme);
 
-        // Применение настроек
-        applyTheme(theme);
-
-        // Применяем язык через LocaleHelper
         LocaleHelper.applyLocale(requireContext(), language);
-
-        // Перезапуск активности для применения изменений
         restartApp();
     }
 

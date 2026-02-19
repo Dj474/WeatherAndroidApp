@@ -2,28 +2,28 @@
 <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:card_view="http://schemas.android.com/apk/res-auto"
     android:id="@+id/swipeRefreshLayout"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="?android:attr/windowBackground">
 
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        android:fillViewport="true">
 
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:padding="16dp">
 
-            <!-- Текущая погода -->
             <androidx.cardview.widget.CardView
                 android:id="@+id/weatherCard"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
-                card_view:cardCornerRadius="12dp"
-                card_view:cardElevation="4dp"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="4dp"
+                app:cardBackgroundColor="?attr/colorSurface"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent">
@@ -31,15 +31,16 @@
                 <androidx.constraintlayout.widget.ConstraintLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:padding="20dp">
+                    android:padding="24dp">
 
                     <TextView
                         android:id="@+id/cityTextView"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/moscow"
-                        android:textSize="24sp"
+                        android:textSize="26sp"
                         android:textStyle="bold"
+                        android:textColor="?android:attr/textColorPrimary"
                         app:layout_constraintEnd_toEndOf="parent"
                         app:layout_constraintStart_toStartOf="parent"
                         app:layout_constraintTop_toTopOf="parent" />
@@ -48,9 +49,11 @@
                         android:id="@+id/temperatureTextView"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp"
+                        android:layout_marginTop="12dp"
                         android:text="25°C"
-                        android:textSize="48sp"
+                        android:textSize="56sp"
+                        android:textStyle="normal"
+                        android:textColor="?android:attr/textColorPrimary"
                         app:layout_constraintEnd_toEndOf="parent"
                         app:layout_constraintStart_toStartOf="parent"
                         app:layout_constraintTop_toBottomOf="@id/cityTextView" />
@@ -59,9 +62,10 @@
                         android:id="@+id/weatherDescriptionTextView"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
+                        android:layout_marginTop="4dp"
                         android:text="@string/sunny"
                         android:textSize="18sp"
+                        android:textColor="?android:attr/textColorSecondary"
                         app:layout_constraintEnd_toEndOf="parent"
                         app:layout_constraintStart_toStartOf="parent"
                         app:layout_constraintTop_toBottomOf="@id/temperatureTextView" />
@@ -77,124 +81,120 @@
                         app:layout_constraintTop_toBottomOf="@id/weatherDescriptionTextView" />
 
                     <LinearLayout
-                        android:id="@+id/weatherDetailsLayout"
-                        android:layout_width="0dp"
+                        android:id="@+id/detailsContainer"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="24dp"
+                        android:layout_marginTop="32dp"
                         android:orientation="horizontal"
                         android:gravity="center"
-                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintTop_toBottomOf="@id/weatherIconImageView"
                         app:layout_constraintStart_toStartOf="parent"
-                        app:layout_constraintTop_toBottomOf="@id/weatherIconImageView">
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintBottom_toBottomOf="parent">
 
                         <LinearLayout
-                            android:layout_width="wrap_content"
+                            android:layout_width="0dp"
                             android:layout_height="wrap_content"
+                            android:layout_weight="1"
                             android:orientation="vertical"
                             android:gravity="center">
-
                             <TextView
                                 android:id="@+id/humidityLabel"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="@string/humidity"
-                                android:textSize="14sp" />
-
+                                android:textColor="?android:attr/textColorSecondary"
+                                android:textSize="12sp"/>
                             <TextView
                                 android:id="@+id/humidityTextView"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:layout_marginTop="4dp"
-                                android:text="65%"
+                                android:textColor="?android:attr/textColorPrimary"
+                                android:textStyle="bold"
                                 android:textSize="16sp"
-                                android:textStyle="bold" />
-
+                                android:text="65%"/>
                         </LinearLayout>
 
                         <LinearLayout
-                            android:layout_width="wrap_content"
+                            android:layout_width="0dp"
                             android:layout_height="wrap_content"
+                            android:layout_weight="1"
                             android:orientation="vertical"
                             android:gravity="center">
-
                             <TextView
                                 android:id="@+id/windLabel"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="@string/wind"
-                                android:textSize="14sp" />
-
+                                android:textColor="?android:attr/textColorSecondary"
+                                android:textSize="12sp"/>
                             <TextView
                                 android:id="@+id/windTextView"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:layout_marginTop="4dp"
-                                android:text="5 м/с"
+                                android:textColor="?android:attr/textColorPrimary"
+                                android:textStyle="bold"
                                 android:textSize="16sp"
-                                android:textStyle="bold" />
-
+                                android:text="5 м/с"/>
                         </LinearLayout>
 
                         <LinearLayout
-                            android:layout_width="wrap_content"
+                            android:layout_width="0dp"
                             android:layout_height="wrap_content"
+                            android:layout_weight="1"
                             android:orientation="vertical"
                             android:gravity="center">
-
                             <TextView
                                 android:id="@+id/pressureLabel"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="@string/pressure"
-                                android:textSize="14sp" />
-
+                                android:textColor="?android:attr/textColorSecondary"
+                                android:textSize="12sp"/>
                             <TextView
                                 android:id="@+id/pressureTextView"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:layout_marginTop="4dp"
-                                android:text="760 мм"
+                                android:textColor="?android:attr/textColorPrimary"
+                                android:textStyle="bold"
                                 android:textSize="16sp"
-                                android:textStyle="bold" />
-
+                                android:text="760 мм"/>
                         </LinearLayout>
-
                     </LinearLayout>
 
                 </androidx.constraintlayout.widget.ConstraintLayout>
-
             </androidx.cardview.widget.CardView>
 
-            <!-- Почасовой прогноз -->
             <TextView
                 android:id="@+id/hourlyForecastLabel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
+                android:layout_marginTop="28dp"
                 android:text="@string/hourly_forecast"
                 android:textSize="20sp"
                 android:textStyle="bold"
+                android:textColor="?android:attr/textColorPrimary"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toBottomOf="@id/weatherCard" />
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/hourlyRecyclerView"
                 android:layout_width="0dp"
-                android:layout_height="140dp"
+                android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toBottomOf="@id/hourlyForecastLabel" />
 
-            <!-- Прогноз на 5 дней -->
             <TextView
                 android:id="@+id/dailyForecastLabel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
+                android:layout_marginTop="28dp"
                 android:text="@string/daily_forecast"
                 android:textSize="20sp"
                 android:textStyle="bold"
+                android:textColor="?android:attr/textColorPrimary"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toBottomOf="@id/hourlyRecyclerView" />
 
@@ -209,7 +209,5 @@
                 app:layout_constraintTop_toBottomOf="@id/dailyForecastLabel" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
-
     </ScrollView>
-
 </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>

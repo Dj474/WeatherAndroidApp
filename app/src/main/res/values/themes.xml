@@ -1,22 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Material Components тема -->
-    <style name="Theme.MaterialComponents.Light" parent="Theme.MaterialComponents.Light">
+<resources>
+    <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">@color/purple_500</item>
         <item name="colorPrimaryDark">@color/purple_700</item>
         <item name="colorAccent">@color/teal_200</item>
+
+        <item name="android:windowBackground">?attr/colorSurface</item>
     </style>
 
-    <!-- Material Components тема без ActionBar -->
-    <style name="Theme.MaterialComponents.Light.NoActionBar" parent="Theme.MaterialComponents.Light">
-        <item name="windowActionBar">false</item>
-        <item name="windowNoTitle">true</item>
-    </style>
-
-    <!-- Тема для Splash -->
-    <style name="Theme.AppCompat.Light.NoActionBar" parent="Theme.AppCompat.Light">
-        <item name="windowActionBar">false</item>
-        <item name="windowNoTitle">true</item>
+    <style name="SplashTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:windowBackground">@android:color/holo_blue_dark</item>
         <item name="android:windowFullscreen">true</item>
     </style>
