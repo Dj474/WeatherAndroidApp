@@ -87,8 +87,14 @@ public class NotesFragment extends Fragment {
                     @Override
                     public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
                         int position = viewHolder.getAdapterPosition();
-                        WeatherNote note = notesList.get(position);
-                        deleteNote(note);
+                        WeatherNote deletedNote = notesList.get(position);
+                        deleteNote(deletedNote);
+
+                        Snackbar.make(notesRecyclerView, getString(R.string.note_deleted), Snackbar.LENGTH_LONG)
+                                .setAction(getString(R.string.undo), v -> {
+                                    saveNote(deletedNote);
+                                })
+                                .show();
                     }
                 }
         );
