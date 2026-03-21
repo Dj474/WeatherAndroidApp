@@ -87,4 +87,7 @@
     <string name="kilometers_per_hour">km/h</string>
     <string name="millimeters">mm</string>
     <string name="degrees">°</string>
+
+    <string name="no_internet">No internet connection</string>
+    <string name="minsk">Minsk</string>
 </resources>

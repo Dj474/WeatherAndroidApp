@@ -2,23 +2,21 @@ package com.example.weatherapp;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.os.AsyncTask;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
-import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
-import org.json.JSONObject;
-import java.text.SimpleDateFormat;
+import com.example.weatherapp.data.WeatherResponse;
+import com.example.weatherapp.viewmodel.WeatherViewModel;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
@@ -32,6 +30,7 @@ public class WeatherFragment extends Fragment {
     private RecyclerView hourlyRecyclerView, dailyRecyclerView;
     private WeatherAdapter hourlyAdapter, dailyAdapter;
     private List<WeatherItem> hourlyItems, dailyItems;
+    private WeatherViewModel viewModel;
 
     @Nullable
     @Override
@@ -39,7 +38,21 @@ public class WeatherFragment extends Fragment {
         View view = inflater.inflate(R.layout.fragment_weather, container, false);
         initViews(view);
         setupRecyclerViews();
-        // Мы не вызываем loadWeatherData здесь, так как onResume сделает это за нас
+
+        viewModel = new ViewModelProvider(this).get(WeatherViewModel.class);
+
+        viewModel.weatherData.observe(getViewLifecycleOwner(), response -> {
+            if (response != null) {
+                updateUI(response.location.name,
+                        response.current.temp_c,
+                        response.current.condition.text,
+                        response.current.humidity,
+                        response.current.wind_kph,
+                        (int) response.current.pressure_mb,
+                        response);
+            }
+        });
+
         return view;
     }
 
@@ -78,20 +91,22 @@ public class WeatherFragment extends Fragment {
     }
 
     private void loadWeatherData() {
-        new FetchWeatherTask().execute(getString(R.string.moscow));
+        SharedPreferences prefs = requireContext().getSharedPreferences("app_settings", Context.MODE_PRIVATE);
+        String lang = prefs.getString("language", "ru");
+        // Запрашиваем Минск напрямую, как ты и хотел
+        viewModel.refreshWeather("Minsk", lang);
     }
 
-    private void updateUI(String city, double temp, String description, int humidity, double wind, int pressure) {
-        // --- СИНХРОНИЗАЦИЯ С SettingsFragment ---
+    private void updateUI(String city, double temp, String description, int humidity, double wind, int pressure, WeatherResponse data) {
         SharedPreferences prefs = requireContext().getSharedPreferences("app_settings", Context.MODE_PRIVATE);
-        String units = prefs.getString("units", "celsius"); // Читаем строку "celsius" или "fahrenheit"
+        String units = prefs.getString("units", "celsius");
         boolean isCelsius = !units.equals("fahrenheit");
 
+        // Расчет для главного экрана
         double displayTemp = isCelsius ? temp : (temp * 1.8) + 32;
         String unitSymbol = isCelsius ? "°C" : "°F";
-        // ---------------------------------------
 
-        cityTextView.setText(city);
+        cityTextView.setText(getString(R.string.minsk));
         temperatureTextView.setText(String.format(Locale.getDefault(), "%.0f%s", displayTemp, unitSymbol));
         weatherDescriptionTextView.setText(description);
 
@@ -100,8 +115,8 @@ public class WeatherFragment extends Fragment {
         pressureTextView.setText(String.format(Locale.getDefault(), "%d %s", pressure, getString(R.string.millimeters)));
 
         updateStaticLabels();
+        updateForecastLists(isCelsius, data);
 
-        updateForecastLists(isCelsius);
         swipeRefreshLayout.setRefreshing(false);
     }
 
@@ -113,47 +128,51 @@ public class WeatherFragment extends Fragment {
         if (pressureLabel != null) pressureLabel.setText(getString(R.string.pressure));
     }
 
-    private void updateForecastLists(boolean isCelsius) {
+    private void updateForecastLists(boolean isCelsius, WeatherResponse data) {
         hourlyItems.clear();
         dailyItems.clear();
 
         hourlyAdapter.setUnits(isCelsius);
         dailyAdapter.setUnits(isCelsius);
 
-        SimpleDateFormat sdf = new SimpleDateFormat("HH:mm", Locale.getDefault());
-        for (int i = 0; i < 8; i++) {
-            hourlyItems.add(new WeatherItem(sdf.format(new Date(System.currentTimeMillis() + i * 3600000)),
-                    getString(R.string.sunny), 25 + i, R.drawable.ic_sunny));
-        }
+        if (data != null && data.forecast != null && !data.forecast.forecastday.isEmpty()) {
+            // Часы
+            for (WeatherResponse.Hour h : data.forecast.forecastday.get(0).hour) {
+                String time = h.time.substring(11);
+                // Передаем сырую температуру (адаптер сам пересчитает) и определяем иконку
+                hourlyItems.add(new WeatherItem(time, h.condition.text, (int) h.temp_c, getIcon(h.condition.text)));
+            }
 
-        String[] dayNames = {getString(R.string.today), getString(R.string.tomorrow), "Вт", "Ср", "Чт"};
-        for (int i = 0; i < 5; i++) {
-            dailyItems.add(new WeatherItem(dayNames[i], getString(R.string.sunny), 22 + i, R.drawable.ic_sunny));
+            // Дни
+            for (WeatherResponse.ForecastDay d : data.forecast.forecastday) {
+                dailyItems.add(new WeatherItem(d.date, d.day.condition.text, (int) d.day.avgtemp_c, getIcon(d.day.condition.text)));
+            }
         }
 
         hourlyAdapter.notifyDataSetChanged();
         dailyAdapter.notifyDataSetChanged();
     }
 
-    private class FetchWeatherTask extends AsyncTask<String, Void, String> {
-        @Override
-        protected String doInBackground(String... params) {
-            try { Thread.sleep(300); } catch (Exception ignored) {}
-            return String.format(Locale.getDefault(),
-                    "{\"city\":\"%s\",\"temp\":25,\"description\":\"%s\",\"humidity\":65,\"wind\":5.0,\"pressure\":760}",
-                    params[0], getString(R.string.sunny));
+    // Тот самый метод для иконок. Проверяет и русские, и английские фразы от API.
+    private int getIcon(String desc) {
+        if (desc == null) return R.drawable.ic_sunny;
+        String d = desc.toLowerCase();
+
+        // Дождь (Rain / Дождь / Морось / Drizzle)
+        if (d.contains("rain") || d.contains("дождь") || d.contains("drizzle") || d.contains("морось")) {
+            return R.drawable.ic_rain;
+        }
+        // Снег (Snow / Снег / Blizzard / Метель)
+        if (d.contains("snow") || d.contains("снег") || d.contains("sleet") || d.contains("метель")) {
+            return R.drawable.ic_snow;
+        }
+        // Облака (Cloud / Облачно / Overcast / Пасмурно)
+        if (d.contains("cloud") || d.contains("облач") || d.contains("overcast") || d.contains("пасмур")) {
+            return R.drawable.ic_cloudy;
         }
 
-        @Override
-        protected void onPostExecute(String result) {
-            try {
-                JSONObject json = new JSONObject(result);
-                updateUI(json.getString("city"), json.getDouble("temp"), json.getString("description"),
-                        json.getInt("humidity"), json.getDouble("wind"), json.getInt("pressure"));
-            } catch (Exception e) {
-                updateUI(getString(R.string.moscow), 25, getString(R.string.sunny), 65, 5, 760);
-            }
-        }
+        // Если ничего не подошло — солнце
+        return R.drawable.ic_sunny;
     }
 
     @Override

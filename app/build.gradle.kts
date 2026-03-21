@@ -41,22 +41,30 @@ dependencies {
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 
-    // Room Database
-    implementation("androidx.room:room-runtime:2.6.1")
-    annotationProcessor("androidx.room:room-compiler:2.6.1")
+    // --- Архитектура MVVM (ViewModel и LiveData) ---
+    val lifecycleVersion = "2.6.1"
+    implementation("androidx.lifecycle:lifecycle-viewmodel:$lifecycleVersion")
+    implementation("androidx.lifecycle:lifecycle-livedata:$lifecycleVersion")
+    implementation("androidx.lifecycle:lifecycle-runtime:$lifecycleVersion")
 
-    // ViewPager2
+    // --- Сеть (Retrofit + Gson) ---
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+
+    // --- Room Database ---
+    val roomVersion = "2.6.1"
+    implementation("androidx.room:room-runtime:$roomVersion")
+    annotationProcessor("androidx.room:room-compiler:$roomVersion")
+    // Поддержка LiveData для Room
+    implementation("androidx.room:room-ktx:$roomVersion")
+
+    // --- UI Компоненты ---
     implementation("androidx.viewpager2:viewpager2:1.0.0")
-
-    // RecyclerView
     implementation("androidx.recyclerview:recyclerview:1.3.2")
-
-    // CardView (используем вместо MaterialCardView)
     implementation("androidx.cardview:cardview:1.0.0")
-
-    // SwipeRefreshLayout
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
 
+    // Тестирование
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
