@@ -1,10 +1,10 @@
 package com.example.weatherapp;
 
+import android.app.AlarmManager;
+import android.app.PendingIntent;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.res.Configuration;
-import android.content.res.Resources;
-import android.os.Build;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -12,15 +12,14 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
+import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AppCompatDelegate;
 import androidx.fragment.app.Fragment;
-import java.util.Locale;
 
 public class SettingsFragment extends Fragment {
 
-    private RadioGroup themeRadioGroup, languageRadioGroup, unitsRadioGroup;
+    private RadioGroup themeRadioGroup, languageRadioGroup, unitsRadioGroup, notificationRadioGroup;
     private Button saveButton;
     private SharedPreferences sharedPreferences;
 
@@ -34,6 +33,7 @@ public class SettingsFragment extends Fragment {
         themeRadioGroup = view.findViewById(R.id.themeRadioGroup);
         languageRadioGroup = view.findViewById(R.id.languageRadioGroup);
         unitsRadioGroup = view.findViewById(R.id.unitsRadioGroup);
+        notificationRadioGroup = view.findViewById(R.id.notificationRadioGroup);
         saveButton = view.findViewById(R.id.saveButton);
 
         sharedPreferences = requireContext().getSharedPreferences("app_settings", Context.MODE_PRIVATE);
@@ -46,105 +46,92 @@ public class SettingsFragment extends Fragment {
     }
 
     private void loadCurrentSettings() {
-        // Загрузка темы
+        // ... (код загрузки темы, языка и единиц остается прежним)
         String theme = sharedPreferences.getString("theme", "system");
-        if (theme.equals("light")) {
-            ((RadioButton) themeRadioGroup.findViewById(R.id.lightThemeRadio)).setChecked(true);
-        } else if (theme.equals("dark")) {
-            ((RadioButton) themeRadioGroup.findViewById(R.id.darkThemeRadio)).setChecked(true);
-        } else {
-            ((RadioButton) themeRadioGroup.findViewById(R.id.systemThemeRadio)).setChecked(true);
-        }
+        if (theme.equals("light")) ((RadioButton) themeRadioGroup.findViewById(R.id.lightThemeRadio)).setChecked(true);
+        else if (theme.equals("dark")) ((RadioButton) themeRadioGroup.findViewById(R.id.darkThemeRadio)).setChecked(true);
+        else ((RadioButton) themeRadioGroup.findViewById(R.id.systemThemeRadio)).setChecked(true);
 
-        // Загрузка языка
         String language = sharedPreferences.getString("language", "ru");
-        if (language.equals("en")) {
-            ((RadioButton) languageRadioGroup.findViewById(R.id.englishRadio)).setChecked(true);
-        } else {
-            ((RadioButton) languageRadioGroup.findViewById(R.id.russianRadio)).setChecked(true);
-        }
+        if (language.equals("en")) ((RadioButton) languageRadioGroup.findViewById(R.id.englishRadio)).setChecked(true);
+        else ((RadioButton) languageRadioGroup.findViewById(R.id.russianRadio)).setChecked(true);
 
-        // Загрузка единиц измерения
         String units = sharedPreferences.getString("units", "celsius");
-        if (units.equals("fahrenheit")) {
-            ((RadioButton) unitsRadioGroup.findViewById(R.id.fahrenheitRadio)).setChecked(true);
-        } else {
-            ((RadioButton) unitsRadioGroup.findViewById(R.id.celsiusRadio)).setChecked(true);
-        }
+        if (units.equals("fahrenheit")) ((RadioButton) unitsRadioGroup.findViewById(R.id.fahrenheitRadio)).setChecked(true);
+        else ((RadioButton) unitsRadioGroup.findViewById(R.id.celsiusRadio)).setChecked(true);
+
+        // Загрузка настроек уведомлений
+        int savedNotificationId = sharedPreferences.getInt("notification_id", R.id.notifyOff);
+        RadioButton rb = notificationRadioGroup.findViewById(savedNotificationId);
+        if (rb != null) rb.setChecked(true);
     }
 
     private void saveSettings() {
         SharedPreferences.Editor editor = sharedPreferences.edit();
 
+        // Тема
         String theme;
         int selectedThemeId = themeRadioGroup.getCheckedRadioButtonId();
-        if (selectedThemeId == R.id.lightThemeRadio) {
-            theme = "light";
-        } else if (selectedThemeId == R.id.darkThemeRadio) {
-            theme = "dark";
-        } else {
-            theme = "system";
-        }
+        if (selectedThemeId == R.id.lightThemeRadio) theme = "light";
+        else if (selectedThemeId == R.id.darkThemeRadio) theme = "dark";
+        else theme = "system";
 
-        String language = (languageRadioGroup.getCheckedRadioButtonId() == R.id.englishRadio)
-                ? "en" : "ru";
+        // Язык и единицы
+        String language = (languageRadioGroup.getCheckedRadioButtonId() == R.id.englishRadio) ? "en" : "ru";
+        String units = (unitsRadioGroup.getCheckedRadioButtonId() == R.id.fahrenheitRadio) ? "fahrenheit" : "celsius";
 
-        String units = (unitsRadioGroup.getCheckedRadioButtonId() == R.id.fahrenheitRadio)
-                ? "fahrenheit" : "celsius";
+        // Уведомления
+        int selectedNotifyId = notificationRadioGroup.getCheckedRadioButtonId();
+        int minutes = 0;
+        if (selectedNotifyId == R.id.notify30s) minutes = -1; // специальный код для 30 сек
+        else if (selectedNotifyId == R.id.notify5m) minutes = 5;
+        else if (selectedNotifyId == R.id.notify60m) minutes = 60;
 
         editor.putString("theme", theme);
         editor.putString("language", language);
         editor.putString("units", units);
+        editor.putInt("notification_id", selectedNotifyId);
         editor.apply();
-        ThemeManager.setThemeMode(theme);
 
+        // Применяем уведомления
+        setupNotifications(minutes);
+
+        ThemeManager.setThemeMode(theme);
         LocaleHelper.applyLocale(requireContext(), language);
         restartApp();
     }
 
+    private void setupNotifications(int minutes) {
+        AlarmManager alarmManager = (AlarmManager) requireContext().getSystemService(Context.ALARM_SERVICE);
+        Intent intent = new Intent(requireContext(), AlarmReceiver.class);
 
-    private void applyTheme(String theme) {
-        switch (theme) {
-            case "light":
-                androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(
-                        androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO);
-                break;
-            case "dark":
-                androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(
-                        androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES);
-                break;
-            default:
-                androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(
-                        androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM);
-        }
-    }
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                requireContext(), 0, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-
-    private void applyLanguage(String language) {
-        Locale locale = new Locale(language);
-        Locale.setDefault(locale);
-
-        Resources resources = getResources();
-        Configuration configuration = resources.getConfiguration();
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
-            configuration.setLocale(locale);
-        } else {
-            configuration.locale = locale;
+        if (minutes == 0) {
+            alarmManager.cancel(pendingIntent);
+            return;
         }
 
-        resources.updateConfiguration(configuration, resources.getDisplayMetrics());
+        long intervalMillis;
+        if (minutes == -1) intervalMillis = 30 * 1000L; // 30 секунд
+        else intervalMillis = minutes * 60 * 1000L;
+
+        alarmManager.setInexactRepeating(
+                AlarmManager.RTC_WAKEUP,
+                System.currentTimeMillis() + intervalMillis,
+                intervalMillis,
+                pendingIntent
+        );
+
+        Toast.makeText(getContext(), "Уведомления настроены", Toast.LENGTH_SHORT).show();
     }
 
     private void restartApp() {
-        // Перезапускаем MainActivity
-        android.content.Intent intent = new android.content.Intent(getActivity(), MainActivity.class);
-        intent.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        Intent intent = new Intent(getActivity(), MainActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);
-
-        // Завершаем текущую активность
-        if (getActivity() != null) {
-            getActivity().finish();
-        }
+        if (getActivity() != null) getActivity().finish();
     }
 }
