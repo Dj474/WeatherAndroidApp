@@ -13,12 +13,14 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.widget.SearchView;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.example.weatherapp.data.WeatherDatabase;
 import com.example.weatherapp.data.WeatherNote;
 import com.example.weatherapp.data.WeatherNoteDao;
+import com.example.weatherapp.viewmodel.WeatherViewModel;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.snackbar.Snackbar;
 import java.util.ArrayList;
@@ -39,10 +41,13 @@ public class NotesFragment extends Fragment {
     private List<WeatherNote> notesList;
     private WeatherNoteDao noteDao;
 
-    // Поток для работы с БД (замена устаревшему AsyncTask)
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
 
-    // Текущие фильтры и сортировка
+    // Переменные для хранения актуальной погоды
+    private double currentTempFromApi = 0.0;
+    private String currentCityFromApi = "Minsk";
+
+    // Параметры фильтрации
     private String currentSearch = "%%";
     private String currentSort = "date_desc";
 
@@ -54,9 +59,18 @@ public class NotesFragment extends Fragment {
         initViews(view);
         noteDao = WeatherDatabase.getDatabase(requireContext()).weatherNoteDao();
 
+        // Подключаемся к погодной ViewModel через Activity
+        WeatherViewModel weatherViewModel = new ViewModelProvider(requireActivity()).get(WeatherViewModel.class);
+        weatherViewModel.weatherData.observe(getViewLifecycleOwner(), response -> {
+            if (response != null) {
+                currentTempFromApi = response.current.temp_c;
+                currentCityFromApi = response.location.name;
+            }
+        });
+
         setupRecyclerView();
         setupListeners();
-        loadNotes(); // Запуск наблюдения за данными
+        loadNotes();
 
         return view;
     }
@@ -72,29 +86,20 @@ public class NotesFragment extends Fragment {
     private void setupRecyclerView() {
         notesList = new ArrayList<>();
         notesAdapter = new NotesAdapter(notesList, new NotesAdapter.OnNoteClickListener() {
-            @Override
-            public void onNoteClick(WeatherNote note) { showEditNoteDialog(note); }
-            @Override
-            public void onNoteLongClick(WeatherNote note) { showDeleteDialog(note); }
+            @Override public void onNoteClick(WeatherNote note) { showEditNoteDialog(note); }
+            @Override public void onNoteLongClick(WeatherNote note) { showDeleteDialog(note); }
         });
-
         notesRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         notesRecyclerView.setAdapter(notesAdapter);
 
-        // Реализация удаления свайпом (Undo через Snackbar)
         ItemTouchHelper itemTouchHelper = new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT) {
-            @Override
-            public boolean onMove(@NonNull RecyclerView r, @NonNull RecyclerView.ViewHolder v, @NonNull RecyclerView.ViewHolder t) { return false; }
-
-            @Override
-            public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
+            @Override public boolean onMove(@NonNull RecyclerView r, @NonNull RecyclerView.ViewHolder v, @NonNull RecyclerView.ViewHolder t) { return false; }
+            @Override public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
                 int position = viewHolder.getAdapterPosition();
                 WeatherNote note = notesList.get(position);
                 deleteNote(note);
-
                 Snackbar.make(notesRecyclerView, "Заметка удалена", Snackbar.LENGTH_LONG)
-                        .setAction("Отмена", v -> saveNote(note))
-                        .show();
+                        .setAction("Отмена", v -> saveNote(note)).show();
             }
         });
         itemTouchHelper.attachToRecyclerView(notesRecyclerView);
@@ -102,26 +107,18 @@ public class NotesFragment extends Fragment {
 
     private void setupListeners() {
         addNoteButton.setOnClickListener(v -> showAddNoteDialog());
-
-        // Реализация нечеткого поиска по мере ввода
         searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
-            @Override
-            public boolean onQueryTextSubmit(String query) { return false; }
-
-            @Override
-            public boolean onQueryTextChange(String newText) {
+            @Override public boolean onQueryTextSubmit(String query) { return false; }
+            @Override public boolean onQueryTextChange(String newText) {
                 currentSearch = "%" + newText + "%";
                 loadNotes();
                 return true;
             }
         });
-
         sortButton.setOnClickListener(v -> showSortDialog());
     }
 
     private void loadNotes() {
-        // Вызываем метод с фильтрацией и сортировкой из DAO
-        // При изменении любого фильтра LiveData автоматически обновит список
         noteDao.getFilteredNotes(currentSearch, "%%", -100.0, 100.0, 0, Long.MAX_VALUE, currentSort)
                 .observe(getViewLifecycleOwner(), notes -> {
                     notesList.clear();
@@ -132,45 +129,30 @@ public class NotesFragment extends Fragment {
     }
 
     private void showSortDialog() {
-        String[] options = {"Новые сначала", "Старые сначала", "Температура (возр.)", "Температура (убыв.)"};
+        String[] options = {"Новые сначала", "Старые сначала", "Температура ↑", "Температура ↓"};
         String[] codes = {"date_desc", "date_asc", "temp_asc", "temp_desc"};
-
-        new AlertDialog.Builder(getContext())
-                .setTitle("Сортировка")
+        new AlertDialog.Builder(getContext()).setTitle("Сортировка")
                 .setItems(options, (dialog, which) -> {
                     currentSort = codes[which];
                     loadNotes();
                 }).show();
     }
 
-    // --- Методы работы с базой данных (Background Threads) ---
-
-    private void saveNote(WeatherNote note) {
-        executorService.execute(() -> noteDao.insert(note));
-    }
-
-    private void updateNote(WeatherNote note) {
-        executorService.execute(() -> noteDao.update(note));
-    }
-
-    private void deleteNote(WeatherNote note) {
-        executorService.execute(() -> noteDao.delete(note));
-    }
-
-    // --- Диалоги создания и редактирования ---
+    private void saveNote(WeatherNote note) { executorService.execute(() -> noteDao.insert(note)); }
+    private void updateNote(WeatherNote note) { executorService.execute(() -> noteDao.update(note)); }
+    private void deleteNote(WeatherNote note) { executorService.execute(() -> noteDao.delete(note)); }
 
     private void showAddNoteDialog() {
         View dialogView = LayoutInflater.from(getContext()).inflate(R.layout.dialog_note, null);
         EditText titleEt = dialogView.findViewById(R.id.titleEditText);
         EditText descEt = dialogView.findViewById(R.id.descriptionEditText);
 
-        new AlertDialog.Builder(getContext())
-                .setTitle("Новая заметка")
-                .setView(dialogView)
+        new AlertDialog.Builder(getContext()).setTitle("Новая заметка").setView(dialogView)
                 .setPositiveButton("Сохранить", (d, w) -> {
                     String title = titleEt.getText().toString().trim();
                     if (!title.isEmpty()) {
-                        saveNote(new WeatherNote(title, descEt.getText().toString(), new Date(), "Minsk", 20.0));
+                        // Используем ПОЛУЧЕННУЮ ТЕМПЕРАТУРУ И ГОРОД
+                        saveNote(new WeatherNote(title, descEt.getText().toString(), new Date(), currentCityFromApi, currentTempFromApi));
                     }
                 })
                 .setNegativeButton("Отмена", null).show();
@@ -180,31 +162,23 @@ public class NotesFragment extends Fragment {
         View dialogView = LayoutInflater.from(getContext()).inflate(R.layout.dialog_note, null);
         EditText titleEt = dialogView.findViewById(R.id.titleEditText);
         EditText descEt = dialogView.findViewById(R.id.descriptionEditText);
-
         titleEt.setText(note.getTitle());
         descEt.setText(note.getDescription());
-
-        new AlertDialog.Builder(getContext())
-                .setTitle("Редактировать")
-                .setView(dialogView)
+        new AlertDialog.Builder(getContext()).setTitle("Редактировать").setView(dialogView)
                 .setPositiveButton("Обновить", (d, w) -> {
                     note.setTitle(titleEt.getText().toString());
                     note.setDescription(descEt.getText().toString());
                     updateNote(note);
-                })
-                .setNegativeButton("Отмена", null).show();
+                }).setNegativeButton("Отмена", null).show();
     }
 
     private void showDeleteDialog(WeatherNote note) {
-        new AlertDialog.Builder(getContext())
-                .setTitle("Удалить заметку?")
-                .setPositiveButton("Да", (d, w) -> deleteNote(note))
-                .setNegativeButton("Нет", null).show();
+        new AlertDialog.Builder(getContext()).setTitle("Удалить?").setPositiveButton("Да", (d, w) -> deleteNote(note)).setNegativeButton("Нет", null).show();
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
-        executorService.shutdown(); // Обязательно закрываем потоки
+        executorService.shutdown();
     }
 }
