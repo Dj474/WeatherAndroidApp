@@ -1,17 +1,17 @@
 package com.example.weatherapp;
 
 import android.app.AlertDialog;
-import android.content.DialogInterface;
-import android.os.AsyncTask;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.widget.SearchView;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -21,240 +21,190 @@ import com.example.weatherapp.data.WeatherNote;
 import com.example.weatherapp.data.WeatherNoteDao;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.snackbar.Snackbar;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class NotesFragment extends Fragment {
 
     private RecyclerView notesRecyclerView;
     private FloatingActionButton addNoteButton;
     private TextView emptyTextView;
+    private SearchView searchView;
+    private ImageButton sortButton;
+
     private NotesAdapter notesAdapter;
     private List<WeatherNote> notesList;
     private WeatherNoteDao noteDao;
 
+    // Поток для работы с БД (замена устаревшему AsyncTask)
+    private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+
+    // Текущие фильтры и сортировка
+    private String currentSearch = "%%";
+    private String currentSort = "date_desc";
+
     @Nullable
     @Override
-    public View onCreateView(@NonNull LayoutInflater inflater,
-                             @Nullable ViewGroup container,
-                             @Nullable Bundle savedInstanceState) {
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_notes, container, false);
 
+        initViews(view);
+        noteDao = WeatherDatabase.getDatabase(requireContext()).weatherNoteDao();
+
+        setupRecyclerView();
+        setupListeners();
+        loadNotes(); // Запуск наблюдения за данными
+
+        return view;
+    }
+
+    private void initViews(View view) {
         notesRecyclerView = view.findViewById(R.id.notesRecyclerView);
         addNoteButton = view.findViewById(R.id.addNoteButton);
         emptyTextView = view.findViewById(R.id.emptyTextView);
-
-        WeatherDatabase database = WeatherDatabase.getDatabase(requireContext());
-        noteDao = database.weatherNoteDao();
-
-        setupRecyclerView();
-        loadNotes();
-
-        addNoteButton.setOnClickListener(v -> showAddNoteDialog());
-
-        return view;
+        searchView = view.findViewById(R.id.searchView);
+        sortButton = view.findViewById(R.id.sortButton);
     }
 
     private void setupRecyclerView() {
         notesList = new ArrayList<>();
         notesAdapter = new NotesAdapter(notesList, new NotesAdapter.OnNoteClickListener() {
             @Override
-            public void onNoteClick(WeatherNote note) {
-                showEditNoteDialog(note);
-            }
-
+            public void onNoteClick(WeatherNote note) { showEditNoteDialog(note); }
             @Override
-            public void onNoteLongClick(WeatherNote note) {
-                showDeleteDialog(note);
-            }
+            public void onNoteLongClick(WeatherNote note) { showDeleteDialog(note); }
         });
 
         notesRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         notesRecyclerView.setAdapter(notesAdapter);
 
-        ItemTouchHelper itemTouchHelper = new ItemTouchHelper(
-                new ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT) {
-                    @Override
-                    public boolean onMove(@NonNull RecyclerView recyclerView,
-                                          @NonNull RecyclerView.ViewHolder viewHolder,
-                                          @NonNull RecyclerView.ViewHolder target) {
-                        return false;
-                    }
+        // Реализация удаления свайпом (Undo через Snackbar)
+        ItemTouchHelper itemTouchHelper = new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT) {
+            @Override
+            public boolean onMove(@NonNull RecyclerView r, @NonNull RecyclerView.ViewHolder v, @NonNull RecyclerView.ViewHolder t) { return false; }
 
-                    @Override
-                    public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
-                        int position = viewHolder.getAdapterPosition();
-                        WeatherNote deletedNote = notesList.get(position);
-                        deleteNote(deletedNote);
+            @Override
+            public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
+                int position = viewHolder.getAdapterPosition();
+                WeatherNote note = notesList.get(position);
+                deleteNote(note);
 
-                        Snackbar.make(notesRecyclerView, getString(R.string.note_deleted), Snackbar.LENGTH_LONG)
-                                .setAction(getString(R.string.undo), v -> {
-                                    saveNote(deletedNote);
-                                })
-                                .show();
-                    }
-                }
-        );
+                Snackbar.make(notesRecyclerView, "Заметка удалена", Snackbar.LENGTH_LONG)
+                        .setAction("Отмена", v -> saveNote(note))
+                        .show();
+            }
+        });
         itemTouchHelper.attachToRecyclerView(notesRecyclerView);
     }
 
-    private void loadNotes() {
-        // Наблюдаем за LiveData напрямую. AsyncTask здесь НЕ НУЖЕН.
-        noteDao.getAllNotes().observe(getViewLifecycleOwner(), notes -> {
-            notesList.clear();
-            if (notes != null) {
-                notesList.addAll(notes);
-            }
-            notesAdapter.notifyDataSetChanged();
+    private void setupListeners() {
+        addNoteButton.setOnClickListener(v -> showAddNoteDialog());
 
-            // Переключаем видимость "Пустого списка"
-            if (notesList.isEmpty()) {
-                emptyTextView.setVisibility(View.VISIBLE);
-                notesRecyclerView.setVisibility(View.GONE);
-            } else {
-                emptyTextView.setVisibility(View.GONE);
-                notesRecyclerView.setVisibility(View.VISIBLE);
+        // Реализация нечеткого поиска по мере ввода
+        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+            @Override
+            public boolean onQueryTextSubmit(String query) { return false; }
+
+            @Override
+            public boolean onQueryTextChange(String newText) {
+                currentSearch = "%" + newText + "%";
+                loadNotes();
+                return true;
             }
         });
+
+        sortButton.setOnClickListener(v -> showSortDialog());
     }
 
+    private void loadNotes() {
+        // Вызываем метод с фильтрацией и сортировкой из DAO
+        // При изменении любого фильтра LiveData автоматически обновит список
+        noteDao.getFilteredNotes(currentSearch, "%%", -100.0, 100.0, 0, Long.MAX_VALUE, currentSort)
+                .observe(getViewLifecycleOwner(), notes -> {
+                    notesList.clear();
+                    if (notes != null) notesList.addAll(notes);
+                    notesAdapter.notifyDataSetChanged();
+                    emptyTextView.setVisibility(notesList.isEmpty() ? View.VISIBLE : View.GONE);
+                });
+    }
+
+    private void showSortDialog() {
+        String[] options = {"Новые сначала", "Старые сначала", "Температура (возр.)", "Температура (убыв.)"};
+        String[] codes = {"date_desc", "date_asc", "temp_asc", "temp_desc"};
+
+        new AlertDialog.Builder(getContext())
+                .setTitle("Сортировка")
+                .setItems(options, (dialog, which) -> {
+                    currentSort = codes[which];
+                    loadNotes();
+                }).show();
+    }
+
+    // --- Методы работы с базой данных (Background Threads) ---
+
+    private void saveNote(WeatherNote note) {
+        executorService.execute(() -> noteDao.insert(note));
+    }
+
+    private void updateNote(WeatherNote note) {
+        executorService.execute(() -> noteDao.update(note));
+    }
+
+    private void deleteNote(WeatherNote note) {
+        executorService.execute(() -> noteDao.delete(note));
+    }
+
+    // --- Диалоги создания и редактирования ---
+
     private void showAddNoteDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
-        builder.setTitle(getString(R.string.new_note));
+        View dialogView = LayoutInflater.from(getContext()).inflate(R.layout.dialog_note, null);
+        EditText titleEt = dialogView.findViewById(R.id.titleEditText);
+        EditText descEt = dialogView.findViewById(R.id.descriptionEditText);
 
-        View dialogView = LayoutInflater.from(getContext())
-                .inflate(R.layout.dialog_note, null);
-
-        EditText titleEditText = dialogView.findViewById(R.id.titleEditText);
-        EditText descriptionEditText = dialogView.findViewById(R.id.descriptionEditText);
-
-        builder.setView(dialogView);
-
-        builder.setPositiveButton(getString(R.string.save), new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                String title = titleEditText.getText().toString().trim();
-                String description = descriptionEditText.getText().toString().trim();
-
-                if (!title.isEmpty()) {
-                    WeatherNote note = new WeatherNote(
-                            title,
-                            description,
-                            new Date(),
-                            getString(R.string.moscow),
-                            25.0
-                    );
-                    saveNote(note);
-                } else {
-                    Toast.makeText(getContext(), getString(R.string.enter_title), Toast.LENGTH_SHORT).show();
-                }
-            }
-        });
-
-        builder.setNegativeButton(getString(R.string.cancel), null);
-
-        builder.show();
+        new AlertDialog.Builder(getContext())
+                .setTitle("Новая заметка")
+                .setView(dialogView)
+                .setPositiveButton("Сохранить", (d, w) -> {
+                    String title = titleEt.getText().toString().trim();
+                    if (!title.isEmpty()) {
+                        saveNote(new WeatherNote(title, descEt.getText().toString(), new Date(), "Minsk", 20.0));
+                    }
+                })
+                .setNegativeButton("Отмена", null).show();
     }
 
     private void showEditNoteDialog(WeatherNote note) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
-        builder.setTitle(getString(R.string.edit_note));
+        View dialogView = LayoutInflater.from(getContext()).inflate(R.layout.dialog_note, null);
+        EditText titleEt = dialogView.findViewById(R.id.titleEditText);
+        EditText descEt = dialogView.findViewById(R.id.descriptionEditText);
 
-        View dialogView = LayoutInflater.from(getContext())
-                .inflate(R.layout.dialog_note, null);
+        titleEt.setText(note.getTitle());
+        descEt.setText(note.getDescription());
 
-        EditText titleEditText = dialogView.findViewById(R.id.titleEditText);
-        EditText descriptionEditText = dialogView.findViewById(R.id.descriptionEditText);
-
-        titleEditText.setText(note.getTitle());
-        descriptionEditText.setText(note.getDescription());
-
-        builder.setView(dialogView);
-
-        builder.setPositiveButton(getString(R.string.save), new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                String title = titleEditText.getText().toString().trim();
-                String description = descriptionEditText.getText().toString().trim();
-
-                if (!title.isEmpty()) {
-                    note.setTitle(title);
-                    note.setDescription(description);
-                    note.setDate(new Date());
+        new AlertDialog.Builder(getContext())
+                .setTitle("Редактировать")
+                .setView(dialogView)
+                .setPositiveButton("Обновить", (d, w) -> {
+                    note.setTitle(titleEt.getText().toString());
+                    note.setDescription(descEt.getText().toString());
                     updateNote(note);
-                } else {
-                    Toast.makeText(getContext(), getString(R.string.enter_title), Toast.LENGTH_SHORT).show();
-                }
-            }
-        });
-
-        builder.setNegativeButton(getString(R.string.cancel), null);
-
-        builder.show();
+                })
+                .setNegativeButton("Отмена", null).show();
     }
 
     private void showDeleteDialog(WeatherNote note) {
         new AlertDialog.Builder(getContext())
-                .setTitle(getString(R.string.delete_note))
-                .setMessage(getString(R.string.delete_note_confirm))
-                .setPositiveButton(getString(R.string.delete), new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        deleteNote(note);
-                    }
-                })
-                .setNegativeButton(getString(R.string.cancel), null)
-                .show();
+                .setTitle("Удалить заметку?")
+                .setPositiveButton("Да", (d, w) -> deleteNote(note))
+                .setNegativeButton("Нет", null).show();
     }
 
-    private void saveNote(final WeatherNote note) {
-        new AsyncTask<Void, Void, Void>() {
-            @Override
-            protected Void doInBackground(Void... voids) {
-                noteDao.insert(note);
-                return null;
-            }
-
-            @Override
-            protected void onPostExecute(Void aVoid) {
-                Toast.makeText(getContext(), getString(R.string.note_saved), Toast.LENGTH_SHORT).show();
-                loadNotes();
-            }
-        }.execute();
-    }
-
-    private void updateNote(final WeatherNote note) {
-        new AsyncTask<Void, Void, Void>() {
-            @Override
-            protected Void doInBackground(Void... voids) {
-                noteDao.update(note);
-                return null;
-            }
-
-            @Override
-            protected void onPostExecute(Void aVoid) {
-                Toast.makeText(getContext(), getString(R.string.note_updated), Toast.LENGTH_SHORT).show();
-                loadNotes();
-            }
-        }.execute();
-    }
-
-    private void deleteNote(final WeatherNote note) {
-        new AsyncTask<Void, Void, Void>() {
-            @Override
-            protected Void doInBackground(Void... voids) {
-                noteDao.delete(note);
-                return null;
-            }
-
-            @Override
-            protected void onPostExecute(Void aVoid) {
-                Toast.makeText(getContext(), getString(R.string.note_deleted), Toast.LENGTH_SHORT).show();
-                loadNotes();
-            }
-        }.execute();
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        executorService.shutdown(); // Обязательно закрываем потоки
     }
 }
