@@ -1,184 +1,213 @@
 package com.example.weatherapp;
 
 import android.app.AlertDialog;
+import android.net.Uri;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
-import android.widget.ImageButton;
-import android.widget.TextView;
+import android.widget.ImageView;
 import android.widget.Toast;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.widget.SearchView;
 import androidx.fragment.app.Fragment;
-import androidx.lifecycle.ViewModelProvider;
-import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
-import com.example.weatherapp.data.WeatherDatabase;
+
+import com.bumptech.glide.Glide;
 import com.example.weatherapp.data.WeatherNote;
-import com.example.weatherapp.data.WeatherNoteDao;
-import com.example.weatherapp.viewmodel.WeatherViewModel;
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
-import com.google.android.material.snackbar.Snackbar;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.Query;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
+import com.imagekit.android.ImageKit;
+import com.imagekit.android.ImageKitCallback;
+import com.imagekit.android.entity.UploadError;
+import com.imagekit.android.entity.UploadResponse;
+
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.Map;
+import java.util.UUID;
 
 public class NotesFragment extends Fragment {
 
     private RecyclerView notesRecyclerView;
-    private FloatingActionButton addNoteButton;
-    private TextView emptyTextView;
-    private SearchView searchView;
-    private ImageButton sortButton;
-
     private NotesAdapter notesAdapter;
     private List<WeatherNote> notesList;
-    private WeatherNoteDao noteDao;
+    private FirebaseFirestore db;
 
-    private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+    private Uri selectedImageUri = null;
+    private ImageView currentPreviewIv = null;
 
-    // Переменные для хранения актуальной погоды
-    private double currentTempFromApi = 0.0;
-    private String currentCityFromApi = "Minsk";
-
-    // Параметры фильтрации
-    private String currentSearch = "%%";
-    private String currentSort = "date_desc";
+    private final ActivityResultLauncher<String> pickImageLauncher = registerForActivityResult(
+            new ActivityResultContracts.GetContent(),
+            uri -> {
+                if (uri != null) {
+                    selectedImageUri = uri;
+                    if (currentPreviewIv != null) {
+                        currentPreviewIv.setImageURI(uri);
+                        currentPreviewIv.setVisibility(View.VISIBLE);
+                    }
+                }
+            }
+    );
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_notes, container, false);
+        db = FirebaseFirestore.getInstance();
 
-        initViews(view);
-        noteDao = WeatherDatabase.getDatabase(requireContext()).weatherNoteDao();
-
-        // Подключаемся к погодной ViewModel через Activity
-        WeatherViewModel weatherViewModel = new ViewModelProvider(requireActivity()).get(WeatherViewModel.class);
-        weatherViewModel.weatherData.observe(getViewLifecycleOwner(), response -> {
-            if (response != null) {
-                currentTempFromApi = response.current.temp_c;
-                currentCityFromApi = response.location.name;
-            }
-        });
-
-        setupRecyclerView();
-        setupListeners();
-        loadNotes();
-
-        return view;
-    }
-
-    private void initViews(View view) {
         notesRecyclerView = view.findViewById(R.id.notesRecyclerView);
-        addNoteButton = view.findViewById(R.id.addNoteButton);
-        emptyTextView = view.findViewById(R.id.emptyTextView);
-        searchView = view.findViewById(R.id.searchView);
-        sortButton = view.findViewById(R.id.sortButton);
-    }
+        notesRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
 
-    private void setupRecyclerView() {
         notesList = new ArrayList<>();
         notesAdapter = new NotesAdapter(notesList, new NotesAdapter.OnNoteClickListener() {
             @Override public void onNoteClick(WeatherNote note) { showEditNoteDialog(note); }
             @Override public void onNoteLongClick(WeatherNote note) { showDeleteDialog(note); }
         });
-        notesRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         notesRecyclerView.setAdapter(notesAdapter);
 
-        ItemTouchHelper itemTouchHelper = new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT) {
-            @Override public boolean onMove(@NonNull RecyclerView r, @NonNull RecyclerView.ViewHolder v, @NonNull RecyclerView.ViewHolder t) { return false; }
-            @Override public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
-                int position = viewHolder.getAdapterPosition();
-                WeatherNote note = notesList.get(position);
-                deleteNote(note);
-                Snackbar.make(notesRecyclerView, "Заметка удалена", Snackbar.LENGTH_LONG)
-                        .setAction("Отмена", v -> saveNote(note)).show();
-            }
-        });
-        itemTouchHelper.attachToRecyclerView(notesRecyclerView);
-    }
+        view.findViewById(R.id.addNoteButton).setOnClickListener(v -> showAddNoteDialog());
 
-    private void setupListeners() {
-        addNoteButton.setOnClickListener(v -> showAddNoteDialog());
-        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
-            @Override public boolean onQueryTextSubmit(String query) { return false; }
-            @Override public boolean onQueryTextChange(String newText) {
-                currentSearch = "%" + newText + "%";
-                loadNotes();
-                return true;
-            }
-        });
-        sortButton.setOnClickListener(v -> showSortDialog());
+        loadNotes();
+        return view;
     }
 
     private void loadNotes() {
-        noteDao.getFilteredNotes(currentSearch, "%%", -100.0, 100.0, 0, Long.MAX_VALUE, currentSort)
-                .observe(getViewLifecycleOwner(), notes -> {
+        db.collection("notes").orderBy("date", Query.Direction.DESCENDING)
+                .addSnapshotListener((value, error) -> {
+                    if (error != null || value == null) return;
                     notesList.clear();
-                    if (notes != null) notesList.addAll(notes);
+                    for (QueryDocumentSnapshot doc : value) {
+                        WeatherNote note = doc.toObject(WeatherNote.class);
+                        note.setId(doc.getId());
+                        notesList.add(note);
+                    }
                     notesAdapter.notifyDataSetChanged();
-                    emptyTextView.setVisibility(notesList.isEmpty() ? View.VISIBLE : View.GONE);
                 });
     }
 
-    private void showSortDialog() {
-        String[] options = {"Новые сначала", "Старые сначала", "Температура ↑", "Температура ↓"};
-        String[] codes = {"date_desc", "date_asc", "temp_asc", "temp_desc"};
-        new AlertDialog.Builder(getContext()).setTitle("Сортировка")
-                .setItems(options, (dialog, which) -> {
-                    currentSort = codes[which];
-                    loadNotes();
-                }).show();
+    private void uploadAndSave(WeatherNote note, boolean isUpdate) {
+        if (selectedImageUri == null) {
+            finalizeFirebaseOperation(note, isUpdate);
+            return;
+        }
+
+        try {
+            // 1. Преобразуем Uri в Bitmap (так как метода для Uri нет)
+            android.graphics.Bitmap bitmap = android.provider.MediaStore.Images.Media.getBitmap(
+                    requireContext().getContentResolver(),
+                    selectedImageUri
+            );
+
+            // 2. Вызываем метод upload(Bitmap, String, String, ...)
+            // Мы должны передать ВСЕ 19 параметров, которые указаны в твоей сигнатуре для Bitmap
+            ImageKit.Companion.getInstance().uploader().upload(
+                    bitmap,                                // 1. file (Bitmap)
+                    "dummy_token",                         // 2. token (нужен Unsigned Upload в консоли)
+                    UUID.randomUUID().toString() + ".jpg", // 3. fileName
+                    true,                                  // 4. useUniqueFileName
+                    new String[]{"demo"},                  // 5. tags (Array)
+                    "/",                                   // 6. folder
+                    false,                                 // 7. isPrivateFile
+                    "",                                    // 8. customCoordinates
+                    "",                                    // 9. responseFields
+                    new ArrayList<>(),                     // 10. extensions (List)
+                    "",                                    // 11. webhookUrl
+                    false,                                 // 12. overwriteFile
+                    true,                                  // 13. overwriteAITags
+                    true,                                  // 14. overwriteTags
+                    true,                                  // 15. overwriteCustomMetadata
+                    new HashMap<>(),                       // 16. customMetadata (Map)
+                    ImageKit.Companion.getInstance().getDefaultUploadPolicy(), // 17. policy (берем дефолтную)
+                    null,                                  // 18. preprocessor
+                    new ImageKitCallback() {               // 19. imageKitCallback
+                        @Override
+                        public void onSuccess(@NonNull UploadResponse response) {
+                            note.setImageUrl(response.getUrl());
+                            finalizeFirebaseOperation(note, isUpdate);
+                            selectedImageUri = null;
+                            Log.d("ImageKit", "Успех: " + response.getUrl());
+                        }
+
+                        @Override
+                        public void onError(@NonNull UploadError error) {
+                            Log.e("ImageKit", "Ошибка: " + error.getMessage());
+                            finalizeFirebaseOperation(note, isUpdate);
+                        }
+                    }
+            );
+        } catch (java.io.IOException e) {
+            e.printStackTrace();
+            finalizeFirebaseOperation(note, isUpdate);
+        }
     }
 
-    private void saveNote(WeatherNote note) { executorService.execute(() -> noteDao.insert(note)); }
-    private void updateNote(WeatherNote note) { executorService.execute(() -> noteDao.update(note)); }
-    private void deleteNote(WeatherNote note) { executorService.execute(() -> noteDao.delete(note)); }
+    private void finalizeFirebaseOperation(WeatherNote note, boolean isUpdate) {
+        if (isUpdate) {
+            db.collection("notes").document(note.getId()).set(note);
+        } else {
+            db.collection("notes").add(note);
+        }
+    }
 
     private void showAddNoteDialog() {
-        View dialogView = LayoutInflater.from(getContext()).inflate(R.layout.dialog_note, null);
-        EditText titleEt = dialogView.findViewById(R.id.titleEditText);
-        EditText descEt = dialogView.findViewById(R.id.descriptionEditText);
+        selectedImageUri = null;
+        View v = LayoutInflater.from(getContext()).inflate(R.layout.dialog_note, null);
+        currentPreviewIv = v.findViewById(R.id.noteImageView);
 
-        new AlertDialog.Builder(getContext()).setTitle("Новая заметка").setView(dialogView)
-                .setPositiveButton("Сохранить", (d, w) -> {
-                    String title = titleEt.getText().toString().trim();
-                    if (!title.isEmpty()) {
-                        // Используем ПОЛУЧЕННУЮ ТЕМПЕРАТУРУ И ГОРОД
-                        saveNote(new WeatherNote(title, descEt.getText().toString(), new Date(), currentCityFromApi, currentTempFromApi));
-                    }
-                })
-                .setNegativeButton("Отмена", null).show();
+        v.findViewById(R.id.selectImageButton).setOnClickListener(view -> pickImageLauncher.launch("image/*"));
+
+        new AlertDialog.Builder(getContext()).setTitle("Новая заметка").setView(v)
+                .setPositiveButton("ОК", (d, w) -> {
+                    EditText t = v.findViewById(R.id.titleEditText);
+                    EditText desc = v.findViewById(R.id.descriptionEditText);
+                    WeatherNote note = new WeatherNote(t.getText().toString(), desc.getText().toString(), new Date(), "Minsk", 20.0);
+                    uploadAndSave(note, false);
+                }).setNegativeButton("Отмена", null).show();
     }
 
     private void showEditNoteDialog(WeatherNote note) {
-        View dialogView = LayoutInflater.from(getContext()).inflate(R.layout.dialog_note, null);
-        EditText titleEt = dialogView.findViewById(R.id.titleEditText);
-        EditText descEt = dialogView.findViewById(R.id.descriptionEditText);
-        titleEt.setText(note.getTitle());
-        descEt.setText(note.getDescription());
-        new AlertDialog.Builder(getContext()).setTitle("Редактировать").setView(dialogView)
+        selectedImageUri = null;
+        View v = LayoutInflater.from(getContext()).inflate(R.layout.dialog_note, null);
+        EditText t = v.findViewById(R.id.titleEditText);
+        EditText desc = v.findViewById(R.id.descriptionEditText);
+        currentPreviewIv = v.findViewById(R.id.noteImageView);
+
+        t.setText(note.getTitle());
+        desc.setText(note.getDescription());
+
+        if (note.getImageUrl() != null) {
+            currentPreviewIv.setVisibility(View.VISIBLE);
+            Glide.with(this).load(note.getImageUrl()).into(currentPreviewIv);
+        }
+
+        v.findViewById(R.id.selectImageButton).setOnClickListener(view -> pickImageLauncher.launch("image/*"));
+
+        new AlertDialog.Builder(getContext()).setTitle("Правка").setView(v)
                 .setPositiveButton("Обновить", (d, w) -> {
-                    note.setTitle(titleEt.getText().toString());
-                    note.setDescription(descEt.getText().toString());
-                    updateNote(note);
+                    note.setTitle(t.getText().toString());
+                    note.setDescription(desc.getText().toString());
+                    uploadAndSave(note, true);
                 }).setNegativeButton("Отмена", null).show();
     }
 
     private void showDeleteDialog(WeatherNote note) {
-        new AlertDialog.Builder(getContext()).setTitle("Удалить?").setPositiveButton("Да", (d, w) -> deleteNote(note)).setNegativeButton("Нет", null).show();
-    }
-
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        executorService.shutdown();
+        new AlertDialog.Builder(getContext())
+                .setTitle("Удалить заметку?")
+                .setPositiveButton("Удалить", (d, w) -> {
+                    if (note.getId() != null) {
+                        db.collection("notes").document(note.getId()).delete();
+                    }
+                })
+                .setNegativeButton("Отмена", null).show();
     }
 }

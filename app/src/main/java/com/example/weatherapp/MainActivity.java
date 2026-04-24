@@ -11,6 +11,9 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.viewpager2.widget.ViewPager2;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.imagekit.android.ImageKit;
+import com.imagekit.android.entity.TransformationPosition;
+import com.imagekit.android.entity.UploadPolicy;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -42,6 +45,17 @@ public class MainActivity extends AppCompatActivity {
                         new String[]{Manifest.permission.POST_NOTIFICATIONS}, 101);
             }
         }
+
+        ImageKit.Companion.init(
+                getApplicationContext(),
+                "public_fURMdKDowwiillu1g0LppHnigTY=", // Твой Public Key
+                "https://ik.imagekit.io/a1xlbprfa", // Твой URL Endpoint
+                TransformationPosition.PATH,
+                new UploadPolicy.Builder()
+                        .requireNetworkType(UploadPolicy.NetworkType.ANY)
+                        .maxRetries(3)
+                        .build()
+        );
     }
 
     @Override

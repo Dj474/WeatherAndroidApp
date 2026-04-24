@@ -4,16 +4,17 @@ import androidx.room.Entity;
 import androidx.room.PrimaryKey;
 import java.util.Date;
 
-@Entity(tableName = "weather_notes")
 public class WeatherNote {
-    @PrimaryKey(autoGenerate = true)
-    private int id;
-
+    //@PrimaryKey(autoGenerate = true)
+    private String id;
     private String title;
     private String description;
+    private String imageUrl; // Ссылка на фото в ImageKit
     private Date date;
     private String city;
     private double temperature;
+
+    public WeatherNote() {} // Обязательно для Firebase
 
     public WeatherNote(String title, String description, Date date, String city, double temperature) {
         this.title = title;
@@ -23,9 +24,13 @@ public class WeatherNote {
         this.temperature = temperature;
     }
 
+    // Геттеры и сеттеры для imageUrl
+    public String getImageUrl() { return imageUrl; }
+    public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
+
     // Геттеры и сеттеры
-    public int getId() { return id; }
-    public void setId(int id) { this.id = id; }
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
 
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
