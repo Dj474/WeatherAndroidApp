@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <EditText
+        android:id="@+id/minTempEt"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Минимальная температура"
+        android:inputType="numberSigned|numberDecimal" />
+
+    <EditText
+        android:id="@+id/maxTempEt"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Максимальная температура"
+        android:inputType="numberSigned|numberDecimal"
+        android:layout_marginTop="10dp" />
+
+</LinearLayout>

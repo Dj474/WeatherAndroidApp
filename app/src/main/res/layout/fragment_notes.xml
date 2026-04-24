@@ -19,11 +19,21 @@
 
     <ImageButton
         android:id="@+id/sortButton"
-        android:layout_width="48dp"
+        android:layout_width="40dp"
+        android:layout_height="48dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:src="@drawable/ic_sort"
+        app:layout_constraintBottom_toBottomOf="@+id/searchView"
+        app:layout_constraintEnd_toStartOf="@+id/filterButton"
+        app:layout_constraintTop_toTopOf="@+id/searchView" />
+
+    <ImageButton
+        android:id="@+id/filterButton"
+        android:layout_width="40dp"
         android:layout_height="48dp"
         android:layout_marginEnd="8dp"
         android:background="?attr/selectableItemBackgroundBorderless"
-        android:src="@drawable/ic_sort"
+        android:src="@drawable/ic_filter_list"
         app:layout_constraintBottom_toBottomOf="@+id/searchView"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="@+id/searchView" />
@@ -51,7 +61,7 @@
         android:id="@+id/emptyTextView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/no_notes"
+        android:text="Заметок нет"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
