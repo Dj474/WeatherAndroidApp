@@ -80,7 +80,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="32dp">
-            <RadioButton android:id="@+id/notify30s" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="30 секунд (тест)" />
+            <RadioButton android:id="@+id/notify30s" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="5 секунд (тест)" />
             <RadioButton android:id="@+id/notify5m" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="5 минут" />
             <RadioButton android:id="@+id/notify60m" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="60 минут" />
             <RadioButton android:id="@+id/notifyOff" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Выключить" />

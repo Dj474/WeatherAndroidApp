@@ -48,7 +48,7 @@ public class MainActivity extends AppCompatActivity {
 
         ImageKit.Companion.init(
                 getApplicationContext(),
-                "public_fURMdKDowwiillu1g0LppHnigTY=", // Твой Public Key
+                "public_vb/Jb1LedRge2WbUXcCw/cOLL9g=", // Твой Public Key
                 "https://ik.imagekit.io/a1xlbprfa", // Твой URL Endpoint
                 TransformationPosition.PATH,
                 new UploadPolicy.Builder()

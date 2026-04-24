@@ -115,7 +115,7 @@ public class SettingsFragment extends Fragment {
         }
 
         long intervalMillis;
-        if (minutes == -1) intervalMillis = 30 * 1000L; // 30 секунд
+        if (minutes == -1) intervalMillis = 5 * 1000L; // 30 секунд
         else intervalMillis = minutes * 60 * 1000L;
 
         alarmManager.setInexactRepeating(
