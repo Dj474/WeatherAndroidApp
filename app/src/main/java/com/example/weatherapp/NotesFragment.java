@@ -30,6 +30,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.bumptech.glide.Glide;
 import com.example.weatherapp.data.WeatherNote;
 import com.example.weatherapp.viewmodel.WeatherViewModel;
+import com.google.firebase.auth.FirebaseAuth; // Добавлено
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
@@ -133,16 +134,34 @@ public class NotesFragment extends Fragment {
     }
 
     private void loadNotes() {
-        db.collection("notes").orderBy("date", Query.Direction.DESCENDING)
+        String currentUid = FirebaseAuth.getInstance().getUid();
+        if (currentUid == null) {
+            Log.e("Firebase", "Ошибка: Пользователь не авторизован");
+            return;
+        }
+
+        Log.d("Firebase", "Загрузка заметок для пользователя: " + currentUid);
+
+        db.collection("notes")
+                .whereEqualTo("userId", currentUid) // Фильтр по ID
+                .orderBy("date", Query.Direction.DESCENDING) // Сортировка
                 .addSnapshotListener((value, error) -> {
-                    if (error != null || value == null) return;
-                    allNotesList.clear();
-                    for (QueryDocumentSnapshot doc : value) {
-                        WeatherNote note = doc.toObject(WeatherNote.class);
-                        note.setId(doc.getId());
-                        allNotesList.add(note);
+                    if (error != null) {
+                        // ЕСЛИ ЗДЕСЬ ОШИБКА — ПРОВЕРЬ LOGCAT, ТАМ БУДЕТ ССЫЛКА НА СОЗДАНИЕ ИНДЕКСА
+                        Log.e("Firebase", "Ошибка загрузки: " + error.getMessage());
+                        return;
                     }
-                    applyAllFilters();
+
+                    if (value != null) {
+                        allNotesList.clear();
+                        for (QueryDocumentSnapshot doc : value) {
+                            WeatherNote note = doc.toObject(WeatherNote.class);
+                            note.setId(doc.getId());
+                            allNotesList.add(note);
+                        }
+                        Log.d("Firebase", "Загружено заметок: " + allNotesList.size());
+                        applyAllFilters();
+                    }
                 });
     }
 
@@ -272,7 +291,12 @@ public class NotesFragment extends Fragment {
                 .setPositiveButton("ОК", (d, w) -> {
                     String t = ((EditText)v.findViewById(R.id.titleEditText)).getText().toString();
                     String desc = ((EditText)v.findViewById(R.id.descriptionEditText)).getText().toString();
-                    uploadAndSave(new WeatherNote(t, desc, new Date(), currentCityFromApi, currentTempFromApi), false);
+
+                    // Создаем заметку и сразу устанавливаем userId
+                    WeatherNote newNote = new WeatherNote(t, desc, new Date(), currentCityFromApi, currentTempFromApi);
+                    newNote.setUserId(FirebaseAuth.getInstance().getUid());
+
+                    uploadAndSave(newNote, false);
                 }).setNegativeButton("Отмена", null).show();
     }
 

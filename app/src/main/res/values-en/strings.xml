@@ -90,4 +90,5 @@
 
     <string name="no_internet">No internet connection</string>
     <string name="minsk">Minsk</string>
+    <string name="welcome">welcome!</string>
 </resources>

@@ -6,6 +6,7 @@ import java.util.Date;
 
 public class WeatherNote {
     //@PrimaryKey(autoGenerate = true)
+    private String userId;
     private String id;
     private String title;
     private String description;
@@ -46,4 +47,7 @@ public class WeatherNote {
 
     public double getTemperature() { return temperature; }
     public void setTemperature(double temperature) { this.temperature = temperature; }
+
+    public String getUserId() { return userId; }
+    public void setUserId(String userId) { this.userId = userId; }
 }

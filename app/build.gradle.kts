@@ -43,6 +43,7 @@ dependencies {
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     implementation(libs.firebase.firestore)
     implementation("com.github.imagekit-developer.imagekit-android:imagekit-android:3.0.1")
+    implementation("com.google.firebase:firebase-auth:22.3.1")
 
     // --- Glide (Отображение фото в RecyclerView) ---
     implementation("com.github.bumptech.glide:glide:4.16.0")
