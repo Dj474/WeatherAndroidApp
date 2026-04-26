@@ -1,11 +1,14 @@
 package com.example.weatherapp;
 
+import android.app.AlertDialog; // Добавлено
 import android.content.Context;
+import android.content.Intent; // Добавлено
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageButton; // Добавлено
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -14,8 +17,11 @@ import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+
 import com.example.weatherapp.data.WeatherResponse;
 import com.example.weatherapp.viewmodel.WeatherViewModel;
+import com.google.firebase.auth.FirebaseAuth; // Добавлено
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -31,6 +37,7 @@ public class WeatherFragment extends Fragment {
     private WeatherAdapter hourlyAdapter, dailyAdapter;
     private List<WeatherItem> hourlyItems, dailyItems;
     private WeatherViewModel viewModel;
+    private ImageButton logoutButton; // Добавлено
 
     @Nullable
     @Override
@@ -73,6 +80,32 @@ public class WeatherFragment extends Fragment {
         swipeRefreshLayout.setOnRefreshListener(this::loadWeatherData);
         hourlyRecyclerView = view.findViewById(R.id.hourlyRecyclerView);
         dailyRecyclerView = view.findViewById(R.id.dailyRecyclerView);
+
+        // Логика кнопки выхода
+        logoutButton = view.findViewById(R.id.logoutButton);
+        if (logoutButton != null) {
+            logoutButton.setOnClickListener(v -> showLogoutDialog());
+        }
+    }
+
+    private void showLogoutDialog() {
+        new AlertDialog.Builder(requireContext())
+                .setTitle(R.string.logout_title)
+                .setMessage(R.string.logout_confirm_msg)
+                .setPositiveButton(R.string.yes, (dialog, which) -> {
+                    // Выход из аккаунта Firebase
+                    FirebaseAuth.getInstance().signOut();
+
+                    // Переход на экран логина и очистка стека переходов
+                    Intent intent = new Intent(getActivity(), LoginActivity.class);
+                    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                    startActivity(intent);
+                    if (getActivity() != null) {
+                        getActivity().finish();
+                    }
+                })
+                .setNegativeButton(R.string.no, null)
+                .show();
     }
 
     private void setupRecyclerViews() {

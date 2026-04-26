@@ -91,4 +91,7 @@
     <string name="no_internet">No internet connection</string>
     <string name="minsk">Minsk</string>
     <string name="welcome">welcome!</string>
+
+    <string name="logout_title">Logout</string>
+    <string name="logout_confirm_msg">You sure?</string>
 </resources>

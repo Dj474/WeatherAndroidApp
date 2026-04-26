@@ -17,10 +17,22 @@
             android:layout_height="wrap_content"
             android:padding="16dp">
 
+            <ImageButton
+                android:id="@+id/logoutButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_logout"
+                app:tint="@color/nav_selected"
+                android:contentDescription="Logout"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
             <androidx.cardview.widget.CardView
                 android:id="@+id/weatherCard"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="48dp"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="4dp"
                 app:cardBackgroundColor="?attr/colorSurface"

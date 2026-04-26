@@ -91,4 +91,7 @@
     <string name="no_internet">Нет подключения к интернету</string>
     <string name="minsk">Минск</string>
     <string name="welcome">Добро пожаловать!</string>
+
+    <string name="logout_title">Выход</string>
+    <string name="logout_confirm_msg">Вы уверены, что хотите выйти из системы?</string>
 </resources>
