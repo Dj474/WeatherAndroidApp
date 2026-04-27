@@ -339,6 +339,7 @@ public class NotesFragment extends Fragment {
                 }).show();
     }
 
+
     private void showFilterDialog() {
         View v = LayoutInflater.from(getContext()).inflate(R.layout.dialog_filter, null);
         EditText minTempEt = v.findViewById(R.id.minTempEt);
