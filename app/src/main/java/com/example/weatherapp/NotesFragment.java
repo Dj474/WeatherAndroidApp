@@ -27,11 +27,11 @@ import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.bumptech.glide.Glide;
 import com.example.weatherapp.data.WeatherNote;
 import com.example.weatherapp.viewmodel.WeatherViewModel;
-import com.google.firebase.auth.FirebaseAuth; // Добавлено
+import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.ListenerRegistration; // Добавлено
 import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
 
@@ -40,7 +40,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class NotesFragment extends Fragment {
 
@@ -54,8 +56,8 @@ public class NotesFragment extends Fragment {
     private List<WeatherNote> filteredList = new ArrayList<>();
 
     private FirebaseFirestore db;
+    private ListenerRegistration notesListener; // Ссылка на активный слушатель
 
-    // Состояние фильтров и сортировки
     private String currentSortMode = "date_desc";
     private double minTemp = -100.0;
     private double maxTemp = 100.0;
@@ -99,7 +101,7 @@ public class NotesFragment extends Fragment {
             }
         });
 
-        loadNotes();
+        startNotesRealtimeUpdates(); // Запуск прослушивания
         return view;
     }
 
@@ -133,22 +135,20 @@ public class NotesFragment extends Fragment {
         filterButton.setOnClickListener(v -> showFilterDialog());
     }
 
-    private void loadNotes() {
+    // РЕАЛИЗАЦИЯ ОБНОВЛЕНИЙ В РЕАЛЬНОМ ВРЕМЕНИ
+    private void startNotesRealtimeUpdates() {
         String currentUid = FirebaseAuth.getInstance().getUid();
-        if (currentUid == null) {
-            Log.e("Firebase", "Ошибка: Пользователь не авторизован");
-            return;
-        }
+        if (currentUid == null) return;
 
-        Log.d("Firebase", "Загрузка заметок для пользователя: " + currentUid);
+        // Если старый слушатель активен — закрываем его перед созданием нового
+        if (notesListener != null) notesListener.remove();
 
-        db.collection("notes")
-                .whereEqualTo("userId", currentUid) // Фильтр по ID
-                .orderBy("date", Query.Direction.DESCENDING) // Сортировка
+        notesListener = db.collection("notes")
+                .whereEqualTo("userId", currentUid)
+                .orderBy("date", Query.Direction.DESCENDING)
                 .addSnapshotListener((value, error) -> {
                     if (error != null) {
-                        // ЕСЛИ ЗДЕСЬ ОШИБКА — ПРОВЕРЬ LOGCAT, ТАМ БУДЕТ ССЫЛКА НА СОЗДАНИЕ ИНДЕКСА
-                        Log.e("Firebase", "Ошибка загрузки: " + error.getMessage());
+                        Log.e("Firebase", "Listen failed.", error);
                         return;
                     }
 
@@ -159,8 +159,7 @@ public class NotesFragment extends Fragment {
                             note.setId(doc.getId());
                             allNotesList.add(note);
                         }
-                        Log.d("Firebase", "Загружено заметок: " + allNotesList.size());
-                        applyAllFilters();
+                        applyAllFilters(); // Мгновенно обновляем UI
                     }
                 });
     }
@@ -185,11 +184,11 @@ public class NotesFragment extends Fragment {
             }
         }
         sortFilteredList();
-        if (getActivity() != null) {
-            getActivity().runOnUiThread(() -> {
-                notesAdapter.notifyDataSetChanged();
-                emptyTextView.setVisibility(filteredList.isEmpty() ? View.VISIBLE : View.GONE);
-            });
+
+        // Обновление UI через адаптер
+        if (notesAdapter != null) {
+            notesAdapter.notifyDataSetChanged();
+            emptyTextView.setVisibility(filteredList.isEmpty() ? View.VISIBLE : View.GONE);
         }
     }
 
@@ -204,21 +203,17 @@ public class NotesFragment extends Fragment {
         });
     }
 
-    // --- ЛОГИКА BASE64 ---
-
     private String encodeImageToBase64(Uri uri) {
         try {
             Bitmap bitmap = MediaStore.Images.Media.getBitmap(requireContext().getContentResolver(), uri);
-
-            // Масштабируем изображение, чтобы не вылететь за лимит 1МБ в Firestore
-            int maxSize = 600; // макс. размер стороны
+            int maxSize = 600;
             float ratio = Math.min((float) maxSize / bitmap.getWidth(), (float) maxSize / bitmap.getHeight());
             int width = Math.round(ratio * bitmap.getWidth());
             int height = Math.round(ratio * bitmap.getHeight());
             Bitmap resizedBitmap = Bitmap.createScaledBitmap(bitmap, width, height, true);
 
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 70, baos); // Сжатие 70%
+            resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 70, baos);
             byte[] b = baos.toByteArray();
             return Base64.encodeToString(b, Base64.DEFAULT);
         } catch (IOException e) {
@@ -247,7 +242,6 @@ public class NotesFragment extends Fragment {
     }
 
     // --- ДИАЛОГИ ---
-
     private void showSortDialog() {
         String[] options = {"Сначала новые", "Сначала старые", "Температура ↑", "Температура ↓"};
         new AlertDialog.Builder(getContext()).setTitle("Сортировка")
@@ -292,7 +286,6 @@ public class NotesFragment extends Fragment {
                     String t = ((EditText)v.findViewById(R.id.titleEditText)).getText().toString();
                     String desc = ((EditText)v.findViewById(R.id.descriptionEditText)).getText().toString();
 
-                    // Создаем заметку и сразу устанавливаем userId
                     WeatherNote newNote = new WeatherNote(t, desc, new Date(), currentCityFromApi, currentTempFromApi);
                     newNote.setUserId(FirebaseAuth.getInstance().getUid());
 
@@ -331,5 +324,14 @@ public class NotesFragment extends Fragment {
         new AlertDialog.Builder(getContext()).setTitle("Удалить?")
                 .setPositiveButton("Да", (d, w) -> db.collection("notes").document(note.getId()).delete())
                 .setNegativeButton("Нет", null).show();
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        // ОСТАНОВКА ПРОСЛУШИВАНИЯ при закрытии экрана
+        if (notesListener != null) {
+            notesListener.remove();
+        }
     }
 }
