@@ -15,7 +15,6 @@ import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -31,7 +30,7 @@ import com.example.weatherapp.data.WeatherNote;
 import com.example.weatherapp.viewmodel.WeatherViewModel;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.ListenerRegistration; // Добавлено
+import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
 
@@ -40,9 +39,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public class NotesFragment extends Fragment {
 
@@ -56,7 +53,7 @@ public class NotesFragment extends Fragment {
     private List<WeatherNote> filteredList = new ArrayList<>();
 
     private FirebaseFirestore db;
-    private ListenerRegistration notesListener; // Ссылка на активный слушатель
+    private ListenerRegistration notesListener; // Для Real-time обновлений
 
     private String currentSortMode = "date_desc";
     private double minTemp = -100.0;
@@ -68,15 +65,33 @@ public class NotesFragment extends Fragment {
     private String currentCityFromApi = "Minsk";
 
     private Uri selectedImageUri = null;
+    private Bitmap cameraBitmap = null;
     private ImageView currentPreviewIv = null;
 
+    // Лаунчер для выбора из ГАЛЕРЕИ
     private final ActivityResultLauncher<String> pickImageLauncher = registerForActivityResult(
             new ActivityResultContracts.GetContent(),
             uri -> {
                 if (uri != null) {
                     selectedImageUri = uri;
+                    cameraBitmap = null;
                     if (currentPreviewIv != null) {
                         currentPreviewIv.setImageURI(uri);
+                        currentPreviewIv.setVisibility(View.VISIBLE);
+                    }
+                }
+            }
+    );
+
+    // Лаунчер для КАМЕРЫ (Platform API)
+    private final ActivityResultLauncher<Void> takePictureLauncher = registerForActivityResult(
+            new ActivityResultContracts.TakePicturePreview(),
+            bitmap -> {
+                if (bitmap != null) {
+                    cameraBitmap = bitmap;
+                    selectedImageUri = null;
+                    if (currentPreviewIv != null) {
+                        currentPreviewIv.setImageBitmap(bitmap);
                         currentPreviewIv.setVisibility(View.VISIBLE);
                     }
                 }
@@ -93,6 +108,7 @@ public class NotesFragment extends Fragment {
         setupRecyclerView();
         setupListeners();
 
+        // Подписка на данные о погоде из ViewModel
         WeatherViewModel weatherViewModel = new ViewModelProvider(requireActivity()).get(WeatherViewModel.class);
         weatherViewModel.weatherData.observe(getViewLifecycleOwner(), response -> {
             if (response != null) {
@@ -101,7 +117,7 @@ public class NotesFragment extends Fragment {
             }
         });
 
-        startNotesRealtimeUpdates(); // Запуск прослушивания
+        startNotesRealtimeUpdates();
         return view;
     }
 
@@ -135,12 +151,10 @@ public class NotesFragment extends Fragment {
         filterButton.setOnClickListener(v -> showFilterDialog());
     }
 
-    // РЕАЛИЗАЦИЯ ОБНОВЛЕНИЙ В РЕАЛЬНОМ ВРЕМЕНИ
     private void startNotesRealtimeUpdates() {
         String currentUid = FirebaseAuth.getInstance().getUid();
         if (currentUid == null) return;
 
-        // Если старый слушатель активен — закрываем его перед созданием нового
         if (notesListener != null) notesListener.remove();
 
         notesListener = db.collection("notes")
@@ -148,10 +162,9 @@ public class NotesFragment extends Fragment {
                 .orderBy("date", Query.Direction.DESCENDING)
                 .addSnapshotListener((value, error) -> {
                     if (error != null) {
-                        Log.e("Firebase", "Listen failed.", error);
+                        Log.e("Firebase", "Ошибка подписки", error);
                         return;
                     }
-
                     if (value != null) {
                         allNotesList.clear();
                         for (QueryDocumentSnapshot doc : value) {
@@ -159,7 +172,7 @@ public class NotesFragment extends Fragment {
                             note.setId(doc.getId());
                             allNotesList.add(note);
                         }
-                        applyAllFilters(); // Мгновенно обновляем UI
+                        applyAllFilters();
                     }
                 });
     }
@@ -184,8 +197,6 @@ public class NotesFragment extends Fragment {
             }
         }
         sortFilteredList();
-
-        // Обновление UI через адаптер
         if (notesAdapter != null) {
             notesAdapter.notifyDataSetChanged();
             emptyTextView.setVisibility(filteredList.isEmpty() ? View.VISIBLE : View.GONE);
@@ -203,45 +214,93 @@ public class NotesFragment extends Fragment {
         });
     }
 
-    private String encodeImageToBase64(Uri uri) {
-        try {
-            Bitmap bitmap = MediaStore.Images.Media.getBitmap(requireContext().getContentResolver(), uri);
-            int maxSize = 600;
-            float ratio = Math.min((float) maxSize / bitmap.getWidth(), (float) maxSize / bitmap.getHeight());
-            int width = Math.round(ratio * bitmap.getWidth());
-            int height = Math.round(ratio * bitmap.getHeight());
-            Bitmap resizedBitmap = Bitmap.createScaledBitmap(bitmap, width, height, true);
+    private String encodeBitmapToBase64(Bitmap bitmap) {
+        int maxSize = 600;
+        float ratio = Math.min((float) maxSize / bitmap.getWidth(), (float) maxSize / bitmap.getHeight());
+        int width = Math.round(ratio * bitmap.getWidth());
+        int height = Math.round(ratio * bitmap.getHeight());
+        Bitmap resizedBitmap = Bitmap.createScaledBitmap(bitmap, width, height, true);
 
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 70, baos);
-            byte[] b = baos.toByteArray();
-            return Base64.encodeToString(b, Base64.DEFAULT);
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
-        }
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 70, baos);
+        byte[] b = baos.toByteArray();
+        return Base64.encodeToString(b, Base64.DEFAULT);
     }
 
     private void uploadAndSave(WeatherNote note, boolean isUpdate) {
         if (selectedImageUri != null) {
-            String base64String = encodeImageToBase64(selectedImageUri);
-            if (base64String != null) {
-                note.setImageUrl(base64String);
-            }
+            try {
+                Bitmap bitmap = MediaStore.Images.Media.getBitmap(requireContext().getContentResolver(), selectedImageUri);
+                note.setImageUrl(encodeBitmapToBase64(bitmap));
+            } catch (IOException e) { e.printStackTrace(); }
+        } else if (cameraBitmap != null) {
+            note.setImageUrl(encodeBitmapToBase64(cameraBitmap));
         }
-        finalizeFirebaseOperation(note, isUpdate);
-        selectedImageUri = null;
-    }
 
-    private void finalizeFirebaseOperation(WeatherNote note, boolean isUpdate) {
         if (isUpdate) {
             db.collection("notes").document(note.getId()).set(note);
         } else {
             db.collection("notes").add(note);
         }
+        selectedImageUri = null;
+        cameraBitmap = null;
     }
 
-    // --- ДИАЛОГИ ---
+    private void showImageSourceDialog() {
+        String[] options = {"Сделать фото", "Выбрать из галереи"};
+        new AlertDialog.Builder(getContext())
+                .setTitle("Добавить фото")
+                .setItems(options, (dialog, which) -> {
+                    if (which == 0) takePictureLauncher.launch(null);
+                    else pickImageLauncher.launch("image/*");
+                }).show();
+    }
+
+    private void showAddNoteDialog() {
+        selectedImageUri = null;
+        cameraBitmap = null;
+        View v = LayoutInflater.from(getContext()).inflate(R.layout.dialog_note, null);
+        currentPreviewIv = v.findViewById(R.id.noteImageView);
+        v.findViewById(R.id.selectImageButton).setOnClickListener(view -> showImageSourceDialog());
+
+        new AlertDialog.Builder(getContext()).setTitle("Новая заметка").setView(v)
+                .setPositiveButton("ОК", (d, w) -> {
+                    String t = ((EditText)v.findViewById(R.id.titleEditText)).getText().toString();
+                    String desc = ((EditText)v.findViewById(R.id.descriptionEditText)).getText().toString();
+                    WeatherNote newNote = new WeatherNote(t, desc, new Date(), currentCityFromApi, currentTempFromApi);
+                    newNote.setUserId(FirebaseAuth.getInstance().getUid());
+                    uploadAndSave(newNote, false);
+                }).setNegativeButton("Отмена", null).show();
+    }
+
+    private void showEditNoteDialog(WeatherNote note) {
+        selectedImageUri = null;
+        cameraBitmap = null;
+        View v = LayoutInflater.from(getContext()).inflate(R.layout.dialog_note, null);
+        EditText tEt = v.findViewById(R.id.titleEditText);
+        EditText dEt = v.findViewById(R.id.descriptionEditText);
+        currentPreviewIv = v.findViewById(R.id.noteImageView);
+
+        tEt.setText(note.getTitle());
+        dEt.setText(note.getDescription());
+
+        if (note.getImageUrl() != null && !note.getImageUrl().isEmpty()) {
+            currentPreviewIv.setVisibility(View.VISIBLE);
+            byte[] decodedString = Base64.decode(note.getImageUrl(), Base64.DEFAULT);
+            Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
+            currentPreviewIv.setImageBitmap(decodedByte);
+        }
+
+        v.findViewById(R.id.selectImageButton).setOnClickListener(view -> showImageSourceDialog());
+
+        new AlertDialog.Builder(getContext()).setTitle("Правка").setView(v)
+                .setPositiveButton("Обновить", (d, w) -> {
+                    note.setTitle(tEt.getText().toString());
+                    note.setDescription(dEt.getText().toString());
+                    uploadAndSave(note, true);
+                }).setNegativeButton("Отмена", null).show();
+    }
+
     private void showSortDialog() {
         String[] options = {"Сначала новые", "Сначала старые", "Температура ↑", "Температура ↓"};
         new AlertDialog.Builder(getContext()).setTitle("Сортировка")
@@ -275,53 +334,8 @@ public class NotesFragment extends Fragment {
                 }).show();
     }
 
-    private void showAddNoteDialog() {
-        selectedImageUri = null;
-        View v = LayoutInflater.from(getContext()).inflate(R.layout.dialog_note, null);
-        currentPreviewIv = v.findViewById(R.id.noteImageView);
-        v.findViewById(R.id.selectImageButton).setOnClickListener(view -> pickImageLauncher.launch("image/*"));
-
-        new AlertDialog.Builder(getContext()).setTitle("Новая заметка").setView(v)
-                .setPositiveButton("ОК", (d, w) -> {
-                    String t = ((EditText)v.findViewById(R.id.titleEditText)).getText().toString();
-                    String desc = ((EditText)v.findViewById(R.id.descriptionEditText)).getText().toString();
-
-                    WeatherNote newNote = new WeatherNote(t, desc, new Date(), currentCityFromApi, currentTempFromApi);
-                    newNote.setUserId(FirebaseAuth.getInstance().getUid());
-
-                    uploadAndSave(newNote, false);
-                }).setNegativeButton("Отмена", null).show();
-    }
-
-    private void showEditNoteDialog(WeatherNote note) {
-        selectedImageUri = null;
-        View v = LayoutInflater.from(getContext()).inflate(R.layout.dialog_note, null);
-        EditText tEt = v.findViewById(R.id.titleEditText);
-        EditText dEt = v.findViewById(R.id.descriptionEditText);
-        currentPreviewIv = v.findViewById(R.id.noteImageView);
-
-        tEt.setText(note.getTitle());
-        dEt.setText(note.getDescription());
-
-        if (note.getImageUrl() != null && !note.getImageUrl().isEmpty()) {
-            currentPreviewIv.setVisibility(View.VISIBLE);
-            byte[] decodedString = Base64.decode(note.getImageUrl(), Base64.DEFAULT);
-            Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
-            currentPreviewIv.setImageBitmap(decodedByte);
-        }
-
-        v.findViewById(R.id.selectImageButton).setOnClickListener(view -> pickImageLauncher.launch("image/*"));
-
-        new AlertDialog.Builder(getContext()).setTitle("Правка").setView(v)
-                .setPositiveButton("Обновить", (d, w) -> {
-                    note.setTitle(tEt.getText().toString());
-                    note.setDescription(dEt.getText().toString());
-                    uploadAndSave(note, true);
-                }).setNegativeButton("Отмена", null).show();
-    }
-
     private void showDeleteDialog(WeatherNote note) {
-        new AlertDialog.Builder(getContext()).setTitle("Удалить?")
+        new AlertDialog.Builder(getContext()).setTitle("Удалить заметку?")
                 .setPositiveButton("Да", (d, w) -> db.collection("notes").document(note.getId()).delete())
                 .setNegativeButton("Нет", null).show();
     }
@@ -329,7 +343,6 @@ public class NotesFragment extends Fragment {
     @Override
     public void onDestroyView() {
         super.onDestroyView();
-        // ОСТАНОВКА ПРОСЛУШИВАНИЯ при закрытии экрана
         if (notesListener != null) {
             notesListener.remove();
         }
