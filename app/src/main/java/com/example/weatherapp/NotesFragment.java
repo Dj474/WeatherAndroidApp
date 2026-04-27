@@ -1,6 +1,7 @@
 package com.example.weatherapp;
 
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
@@ -53,7 +54,7 @@ public class NotesFragment extends Fragment {
     private List<WeatherNote> filteredList = new ArrayList<>();
 
     private FirebaseFirestore db;
-    private ListenerRegistration notesListener; // Для Real-time обновлений
+    private ListenerRegistration notesListener;
 
     private String currentSortMode = "date_desc";
     private double minTemp = -100.0;
@@ -68,7 +69,6 @@ public class NotesFragment extends Fragment {
     private Bitmap cameraBitmap = null;
     private ImageView currentPreviewIv = null;
 
-    // Лаунчер для выбора из ГАЛЕРЕИ
     private final ActivityResultLauncher<String> pickImageLauncher = registerForActivityResult(
             new ActivityResultContracts.GetContent(),
             uri -> {
@@ -83,7 +83,6 @@ public class NotesFragment extends Fragment {
             }
     );
 
-    // Лаунчер для КАМЕРЫ (Platform API)
     private final ActivityResultLauncher<Void> takePictureLauncher = registerForActivityResult(
             new ActivityResultContracts.TakePicturePreview(),
             bitmap -> {
@@ -108,7 +107,6 @@ public class NotesFragment extends Fragment {
         setupRecyclerView();
         setupListeners();
 
-        // Подписка на данные о погоде из ViewModel
         WeatherViewModel weatherViewModel = new ViewModelProvider(requireActivity()).get(WeatherViewModel.class);
         weatherViewModel.weatherData.observe(getViewLifecycleOwner(), response -> {
             if (response != null) {
@@ -134,7 +132,7 @@ public class NotesFragment extends Fragment {
         notesRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         notesAdapter = new NotesAdapter(filteredList, new NotesAdapter.OnNoteClickListener() {
             @Override public void onNoteClick(WeatherNote note) { showEditNoteDialog(note); }
-            @Override public void onNoteLongClick(WeatherNote note) { showDeleteDialog(note); }
+            @Override public void onNoteLongClick(WeatherNote note) { showActionMenu(note); } // Изменено на меню действий
         });
         notesRecyclerView.setAdapter(notesAdapter);
     }
@@ -244,6 +242,32 @@ public class NotesFragment extends Fragment {
         }
         selectedImageUri = null;
         cameraBitmap = null;
+    }
+
+    // --- ФУНКЦИЯ ПОДЕЛИТЬСЯ (Соцсети) ---
+    private void shareNote(WeatherNote note) {
+        String shareText = "🌤 Моя погодная заметка: " + note.getTitle() + "\n" +
+                "📍 Город: " + note.getCity() + "\n" +
+                "🌡 Температура: " + note.getTemperature() + "°C\n" +
+                "📝 Описание: " + note.getDescription();
+
+        Intent sendIntent = new Intent();
+        sendIntent.setAction(Intent.ACTION_SEND);
+        sendIntent.putExtra(Intent.EXTRA_TEXT, shareText);
+        sendIntent.setType("text/plain");
+
+        Intent shareIntent = Intent.createChooser(sendIntent, "Поделиться через:");
+        startActivity(shareIntent);
+    }
+
+    private void showActionMenu(WeatherNote note) {
+        String[] options = {"Поделиться", "Удалить", "Отмена"};
+        new AlertDialog.Builder(getContext())
+                .setTitle("Выберите действие")
+                .setItems(options, (dialog, which) -> {
+                    if (which == 0) shareNote(note);
+                    else if (which == 1) showDeleteDialog(note);
+                }).show();
     }
 
     private void showImageSourceDialog() {
